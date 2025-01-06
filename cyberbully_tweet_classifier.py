@@ -1,4 +1,4 @@
-import pandas as pd # type: ignore
+import pandas as pd 
 import re
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
