@@ -1,0 +1,2883 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 91
+        },
+        "id": "_Kdo2R2J-JRF",
+        "outputId": "2c176dfa-d24c-40cc-fae8-f7c88d2d3cdb"
+      },
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "\n",
+              "     <input type=\"file\" id=\"files-4fed771c-3592-4341-953a-4bf041e1224c\" name=\"files[]\" multiple disabled\n",
+              "        style=\"border:none\" />\n",
+              "     <output id=\"result-4fed771c-3592-4341-953a-4bf041e1224c\">\n",
+              "      Upload widget is only available when the cell has been executed in the\n",
+              "      current browser session. Please rerun this cell to enable.\n",
+              "      </output>\n",
+              "      <script>// Copyright 2017 Google LLC\n",
+              "//\n",
+              "// Licensed under the Apache License, Version 2.0 (the \"License\");\n",
+              "// you may not use this file except in compliance with the License.\n",
+              "// You may obtain a copy of the License at\n",
+              "//\n",
+              "//      http://www.apache.org/licenses/LICENSE-2.0\n",
+              "//\n",
+              "// Unless required by applicable law or agreed to in writing, software\n",
+              "// distributed under the License is distributed on an \"AS IS\" BASIS,\n",
+              "// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n",
+              "// See the License for the specific language governing permissions and\n",
+              "// limitations under the License.\n",
+              "\n",
+              "/**\n",
+              " * @fileoverview Helpers for google.colab Python module.\n",
+              " */\n",
+              "(function(scope) {\n",
+              "function span(text, styleAttributes = {}) {\n",
+              "  const element = document.createElement('span');\n",
+              "  element.textContent = text;\n",
+              "  for (const key of Object.keys(styleAttributes)) {\n",
+              "    element.style[key] = styleAttributes[key];\n",
+              "  }\n",
+              "  return element;\n",
+              "}\n",
+              "\n",
+              "// Max number of bytes which will be uploaded at a time.\n",
+              "const MAX_PAYLOAD_SIZE = 100 * 1024;\n",
+              "\n",
+              "function _uploadFiles(inputId, outputId) {\n",
+              "  const steps = uploadFilesStep(inputId, outputId);\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  // Cache steps on the outputElement to make it available for the next call\n",
+              "  // to uploadFilesContinue from Python.\n",
+              "  outputElement.steps = steps;\n",
+              "\n",
+              "  return _uploadFilesContinue(outputId);\n",
+              "}\n",
+              "\n",
+              "// This is roughly an async generator (not supported in the browser yet),\n",
+              "// where there are multiple asynchronous steps and the Python side is going\n",
+              "// to poll for completion of each step.\n",
+              "// This uses a Promise to block the python side on completion of each step,\n",
+              "// then passes the result of the previous step as the input to the next step.\n",
+              "function _uploadFilesContinue(outputId) {\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  const steps = outputElement.steps;\n",
+              "\n",
+              "  const next = steps.next(outputElement.lastPromiseValue);\n",
+              "  return Promise.resolve(next.value.promise).then((value) => {\n",
+              "    // Cache the last promise value to make it available to the next\n",
+              "    // step of the generator.\n",
+              "    outputElement.lastPromiseValue = value;\n",
+              "    return next.value.response;\n",
+              "  });\n",
+              "}\n",
+              "\n",
+              "/**\n",
+              " * Generator function which is called between each async step of the upload\n",
+              " * process.\n",
+              " * @param {string} inputId Element ID of the input file picker element.\n",
+              " * @param {string} outputId Element ID of the output display.\n",
+              " * @return {!Iterable<!Object>} Iterable of next steps.\n",
+              " */\n",
+              "function* uploadFilesStep(inputId, outputId) {\n",
+              "  const inputElement = document.getElementById(inputId);\n",
+              "  inputElement.disabled = false;\n",
+              "\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  outputElement.innerHTML = '';\n",
+              "\n",
+              "  const pickedPromise = new Promise((resolve) => {\n",
+              "    inputElement.addEventListener('change', (e) => {\n",
+              "      resolve(e.target.files);\n",
+              "    });\n",
+              "  });\n",
+              "\n",
+              "  const cancel = document.createElement('button');\n",
+              "  inputElement.parentElement.appendChild(cancel);\n",
+              "  cancel.textContent = 'Cancel upload';\n",
+              "  const cancelPromise = new Promise((resolve) => {\n",
+              "    cancel.onclick = () => {\n",
+              "      resolve(null);\n",
+              "    };\n",
+              "  });\n",
+              "\n",
+              "  // Wait for the user to pick the files.\n",
+              "  const files = yield {\n",
+              "    promise: Promise.race([pickedPromise, cancelPromise]),\n",
+              "    response: {\n",
+              "      action: 'starting',\n",
+              "    }\n",
+              "  };\n",
+              "\n",
+              "  cancel.remove();\n",
+              "\n",
+              "  // Disable the input element since further picks are not allowed.\n",
+              "  inputElement.disabled = true;\n",
+              "\n",
+              "  if (!files) {\n",
+              "    return {\n",
+              "      response: {\n",
+              "        action: 'complete',\n",
+              "      }\n",
+              "    };\n",
+              "  }\n",
+              "\n",
+              "  for (const file of files) {\n",
+              "    const li = document.createElement('li');\n",
+              "    li.append(span(file.name, {fontWeight: 'bold'}));\n",
+              "    li.append(span(\n",
+              "        `(${file.type || 'n/a'}) - ${file.size} bytes, ` +\n",
+              "        `last modified: ${\n",
+              "            file.lastModifiedDate ? file.lastModifiedDate.toLocaleDateString() :\n",
+              "                                    'n/a'} - `));\n",
+              "    const percent = span('0% done');\n",
+              "    li.appendChild(percent);\n",
+              "\n",
+              "    outputElement.appendChild(li);\n",
+              "\n",
+              "    const fileDataPromise = new Promise((resolve) => {\n",
+              "      const reader = new FileReader();\n",
+              "      reader.onload = (e) => {\n",
+              "        resolve(e.target.result);\n",
+              "      };\n",
+              "      reader.readAsArrayBuffer(file);\n",
+              "    });\n",
+              "    // Wait for the data to be ready.\n",
+              "    let fileData = yield {\n",
+              "      promise: fileDataPromise,\n",
+              "      response: {\n",
+              "        action: 'continue',\n",
+              "      }\n",
+              "    };\n",
+              "\n",
+              "    // Use a chunked sending to avoid message size limits. See b/62115660.\n",
+              "    let position = 0;\n",
+              "    do {\n",
+              "      const length = Math.min(fileData.byteLength - position, MAX_PAYLOAD_SIZE);\n",
+              "      const chunk = new Uint8Array(fileData, position, length);\n",
+              "      position += length;\n",
+              "\n",
+              "      const base64 = btoa(String.fromCharCode.apply(null, chunk));\n",
+              "      yield {\n",
+              "        response: {\n",
+              "          action: 'append',\n",
+              "          file: file.name,\n",
+              "          data: base64,\n",
+              "        },\n",
+              "      };\n",
+              "\n",
+              "      let percentDone = fileData.byteLength === 0 ?\n",
+              "          100 :\n",
+              "          Math.round((position / fileData.byteLength) * 100);\n",
+              "      percent.textContent = `${percentDone}% done`;\n",
+              "\n",
+              "    } while (position < fileData.byteLength);\n",
+              "  }\n",
+              "\n",
+              "  // All done.\n",
+              "  yield {\n",
+              "    response: {\n",
+              "      action: 'complete',\n",
+              "    }\n",
+              "  };\n",
+              "}\n",
+              "\n",
+              "scope.google = scope.google || {};\n",
+              "scope.google.colab = scope.google.colab || {};\n",
+              "scope.google.colab._files = {\n",
+              "  _uploadFiles,\n",
+              "  _uploadFilesContinue,\n",
+              "};\n",
+              "})(self);\n",
+              "</script> "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Saving cyberbullying_tweets.csv.zip to cyberbullying_tweets.csv.zip\n"
+          ]
+        }
+      ],
+      "source": [
+        "from google.colab import files\n",
+        "uploaded=files.upload()\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "data=pd.read_csv('cyberbullying_tweets.csv.zip')"
+      ],
+      "metadata": {
+        "id": "EZwpJ_kJAFD6"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(data.head())"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "KTttU-GvA--6",
+        "outputId": "4ff3c0c7-baa6-4420-8dee-9e1d513b50a3"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "                                          tweet_text cyberbullying_type\n",
+            "0  In other words #katandandre, your food was cra...  not_cyberbullying\n",
+            "1  Why is #aussietv so white? #MKR #theblock #ImA...  not_cyberbullying\n",
+            "2  @XochitlSuckkks a classy whore? Or more red ve...  not_cyberbullying\n",
+            "3  @Jason_Gio meh. :P  thanks for the heads up, b...  not_cyberbullying\n",
+            "4  @RudhoeEnglish This is an ISIS account pretend...  not_cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import re  # For regular expressions\n",
+        "import nltk  # For stopword removal\n",
+        "from nltk.corpus import stopwords\n",
+        "\n",
+        "# Step 1: Download the stopwords\n",
+        "nltk.download('stopwords')\n",
+        "stop_words = set(stopwords.words('english'))\n",
+        "\n",
+        "# Step 2: Define a function to clean the text\n",
+        "def preprocess_text(text):\n",
+        "    # Convert text to lowercase\n",
+        "    text = text.lower()\n",
+        "    # Remove URLs\n",
+        "    text = re.sub(r\"http\\S+|www\\S+\", '', text)\n",
+        "    # Remove mentions and hashtags\n",
+        "    text = re.sub(r'@\\w+|#\\w+', '', text)\n",
+        "    # Remove non-alphabetical characters (e.g., numbers, punctuation)\n",
+        "    text = re.sub(r'[^a-zA-Z\\s]', '', text)\n",
+        "    # Remove stopwords\n",
+        "    text = \" \".join(word for word in text.split() if word not in stop_words)\n",
+        "    return text\n",
+        "\n",
+        "# Step 3: Apply preprocessing to the 'text' column in your dataset\n",
+        "data['tweet_text'] = data['tweet_text'].apply(preprocess_text)\n",
+        "\n",
+        "# Step 4: Verify the cleaned data\n",
+        "print(data.head())\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "k-heuOqwB5eE",
+        "outputId": "5a343b61-ab54-4d16-d705-90c6e57165b6"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "[nltk_data] Downloading package stopwords to /root/nltk_data...\n",
+            "[nltk_data]   Package stopwords is already up-to-date!\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "                                          tweet_text cyberbullying_type\n",
+            "0                            words food crapilicious  not_cyberbullying\n",
+            "1                                              white  not_cyberbullying\n",
+            "2                   classy whore red velvet cupcakes  not_cyberbullying\n",
+            "3  meh p thanks heads concerned another angry dud...  not_cyberbullying\n",
+            "4  isis account pretending kurdish account like i...  not_cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(data.head())"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "n2SNqvc7DOEj",
+        "outputId": "a10eb0e5-e90b-466f-83f1-63903d6310ea"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "                                          tweet_text cyberbullying_type\n",
+            "0                            words food crapilicious  not_cyberbullying\n",
+            "1                                              white  not_cyberbullying\n",
+            "2                   classy whore red velvet cupcakes  not_cyberbullying\n",
+            "3  meh p thanks heads concerned another angry dud...  not_cyberbullying\n",
+            "4  isis account pretending kurdish account like i...  not_cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "data.to_csv('cleaned_data.csv',index=False)\n",
+        "from google.colab import files\n",
+        "files.download('cleaned_data.csv')"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 17
+        },
+        "id": "9FQ35i0tDbbi",
+        "outputId": "f4958ff2-a59e-4aae-9519-46cf229729da"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "\n",
+              "    async function download(id, filename, size) {\n",
+              "      if (!google.colab.kernel.accessAllowed) {\n",
+              "        return;\n",
+              "      }\n",
+              "      const div = document.createElement('div');\n",
+              "      const label = document.createElement('label');\n",
+              "      label.textContent = `Downloading \"${filename}\": `;\n",
+              "      div.appendChild(label);\n",
+              "      const progress = document.createElement('progress');\n",
+              "      progress.max = size;\n",
+              "      div.appendChild(progress);\n",
+              "      document.body.appendChild(div);\n",
+              "\n",
+              "      const buffers = [];\n",
+              "      let downloaded = 0;\n",
+              "\n",
+              "      const channel = await google.colab.kernel.comms.open(id);\n",
+              "      // Send a message to notify the kernel that we're ready.\n",
+              "      channel.send({})\n",
+              "\n",
+              "      for await (const message of channel.messages) {\n",
+              "        // Send a message to notify the kernel that we're ready.\n",
+              "        channel.send({})\n",
+              "        if (message.buffers) {\n",
+              "          for (const buffer of message.buffers) {\n",
+              "            buffers.push(buffer);\n",
+              "            downloaded += buffer.byteLength;\n",
+              "            progress.value = downloaded;\n",
+              "          }\n",
+              "        }\n",
+              "      }\n",
+              "      const blob = new Blob(buffers, {type: 'application/binary'});\n",
+              "      const a = document.createElement('a');\n",
+              "      a.href = window.URL.createObjectURL(blob);\n",
+              "      a.download = filename;\n",
+              "      div.appendChild(a);\n",
+              "      a.click();\n",
+              "      div.remove();\n",
+              "    }\n",
+              "  "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "download(\"download_30c32bf9-0e39-4651-ba09-aaca4636d0a6\", \"cleaned_data.csv\", 4501877)"
+            ]
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+        "from sklearn.linear_model import LogisticRegression\n",
+        "from sklearn.metrics import accuracy_score, classification_report\n"
+      ],
+      "metadata": {
+        "id": "PcWI06vFEgYD"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Features (cleaned text) and labels (cyberbullying or non-cyberbullying)\n",
+        "X = data['tweet_text']  # Text data\n",
+        "y = data['cyberbullying_type']  # Labels\n",
+        "\n",
+        "# Split into training and testing sets (80% training, 20% testing)\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "print(f\"Training samples: {len(X_train)}\")\n",
+        "print(f\"Testing samples: {len(X_test)}\")\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "hMfu7c7HEt9b",
+        "outputId": "be92b99a-1253-4dbc-ef3f-b694f7ebe6a0"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Training samples: 38153\n",
+            "Testing samples: 9539\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Initialize TF-IDF Vectorizer\n",
+        "vectorizer = TfidfVectorizer(max_features=5000)  # Limit to 5000 features for simplicity\n",
+        "\n",
+        "# Fit and transform the training data, transform the test data\n",
+        "X_train_tfidf = vectorizer.fit_transform(X_train)\n",
+        "X_test_tfidf = vectorizer.transform(X_test)\n",
+        "\n",
+        "print(f\"TF-IDF matrix shape (training): {X_train_tfidf.shape}\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "daT2lnyxFabH",
+        "outputId": "4ce5a099-aef5-4f5f-d832-0777fa92fb35"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "TF-IDF matrix shape (training): (38153, 5000)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Initialize and train the Logistic Regression model\n",
+        "model = LogisticRegression()\n",
+        "model.fit(X_train_tfidf, y_train)\n",
+        "\n",
+        "print(\"Model training complete.\")\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "a-ltUM9ZFjWa",
+        "outputId": "1a7e8977-e440-44f8-b758-3efdf170a7fc"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Model training complete.\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Predict labels for the test data\n",
+        "y_pred = model.predict(X_test_tfidf)\n",
+        "\n",
+        "# Evaluate accuracy\n",
+        "accuracy = accuracy_score(y_test, y_pred)\n",
+        "print(f\"Accuracy: {accuracy * 100:.2f}%\")\n",
+        "\n",
+        "# Display a classification report\n",
+        "print(\"Classification Report:\")\n",
+        "print(classification_report(y_test, y_pred))\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "1-CVFiP_Fvu2",
+        "outputId": "ba704665-087f-47c5-bed4-c863b4f00d39"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Accuracy: 80.73%\n",
+            "Classification Report:\n",
+            "                     precision    recall  f1-score   support\n",
+            "\n",
+            "                age       0.95      0.97      0.96      1603\n",
+            "          ethnicity       0.98      0.96      0.97      1603\n",
+            "             gender       0.88      0.81      0.84      1531\n",
+            "  not_cyberbullying       0.55      0.55      0.55      1624\n",
+            "other_cyberbullying       0.58      0.64      0.61      1612\n",
+            "           religion       0.95      0.93      0.94      1566\n",
+            "\n",
+            "           accuracy                           0.81      9539\n",
+            "          macro avg       0.81      0.81      0.81      9539\n",
+            "       weighted avg       0.81      0.81      0.81      9539\n",
+            "\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import joblib\n",
+        "\n",
+        "# Save the model and vectorizer\n",
+        "joblib.dump(model, 'cyberbully_classifier.pkl')\n",
+        "joblib.dump(vectorizer, 'tfidf_vectorizer.pkl')\n",
+        "\n",
+        "print(\"Model and vectorizer saved!\")\n",
+        "\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "6G4O7p-ZGHAq",
+        "outputId": "d67f9a0f-6cd8-47ed-f6d7-4e0bc7f3c272"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Model and vectorizer saved!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import joblib\n",
+        "\n",
+        "# Load the trained model and the vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "lIMF9h-VG0Pj"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Predict the labels of the test dataset\n",
+        "y_pred = model.predict(X_test_tfidf)\n",
+        "\n",
+        "# Print the predictions (just the first few predictions to see the result)\n",
+        "print(\"Predictions:\", y_pred[:10])  # Output: ['cyberbullying', 'non-cyberbullying', ...]\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "tZYUXTZJG6uj",
+        "outputId": "88250aff-0fd1-43db-8322-f151ff68fc90"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Predictions: ['ethnicity' 'gender' 'ethnicity' 'other_cyberbullying'\n",
+            " 'not_cyberbullying' 'ethnicity' 'ethnicity' 'gender' 'age' 'gender']\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.metrics import accuracy_score, classification_report\n",
+        "\n",
+        "# Evaluate the accuracy\n",
+        "accuracy = accuracy_score(y_test, y_pred)\n",
+        "print(f\"Accuracy: {accuracy * 100:.2f}%\")\n",
+        "\n",
+        "# Detailed classification report (precision, recall, f1-score)\n",
+        "print(\"Classification Report:\")\n",
+        "print(classification_report(y_test, y_pred))\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Lpi6rzjhHLqz",
+        "outputId": "8b9dde82-9e7b-4da4-e8dc-f3d6af6d195e"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Accuracy: 80.73%\n",
+            "Classification Report:\n",
+            "                     precision    recall  f1-score   support\n",
+            "\n",
+            "                age       0.95      0.97      0.96      1603\n",
+            "          ethnicity       0.98      0.96      0.97      1603\n",
+            "             gender       0.88      0.81      0.84      1531\n",
+            "  not_cyberbullying       0.55      0.55      0.55      1624\n",
+            "other_cyberbullying       0.58      0.64      0.61      1612\n",
+            "           religion       0.95      0.93      0.94      1566\n",
+            "\n",
+            "           accuracy                           0.81      9539\n",
+            "          macro avg       0.81      0.81      0.81      9539\n",
+            "       weighted avg       0.81      0.81      0.81      9539\n",
+            "\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# New tweet to predict\n",
+        "new_tweet = \"You're so dumb, nobody likes you!\"\n",
+        "\n",
+        "# Preprocess the new tweet\n",
+        "processed_tweet = preprocess_text(new_tweet)\n",
+        "\n",
+        "# Vectorize the tweet using the same vectorizer\n",
+        "vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "# Predict using the trained model\n",
+        "prediction = model.predict(vectorized_tweet)\n",
+        "\n",
+        "# Output the prediction (cyberbullying or non-cyberbullying)\n",
+        "print(\"Prediction:\", prediction[0])\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Yb7IMdYDHldr",
+        "outputId": "869c9656-c8df-4bcd-f33c-178f6e73d65f"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prediction: ethnicity\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import joblib\n",
+        "\n",
+        "# Save the model and vectorizer\n",
+        "joblib.dump(model, 'cyberbully_classifier.pkl')  # Save the trained model\n",
+        "joblib.dump(vectorizer, 'tfidf_vectorizer.pkl')  # Save the vectorizer\n",
+        "\n",
+        "print(\"Model and vectorizer have been saved successfully!\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "bR-9x6qIH9Kr",
+        "outputId": "8cf97aa8-8efe-4117-e118-d602891754b6"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Model and vectorizer have been saved successfully!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import joblib\n",
+        "\n",
+        "# Load the trained model and vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "hPKrkF_4JGYL"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import joblib\n",
+        "import re\n",
+        "from nltk.corpus import stopwords\n",
+        "\n",
+        "# Load the trained model and vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n",
+        "# Function to preprocess new tweets\n",
+        "def preprocess_text(text):\n",
+        "    stop_words = set(stopwords.words('english'))  # Download stopwords if not already done\n",
+        "\n",
+        "    # Convert to lowercase\n",
+        "    text = text.lower()\n",
+        "    # Remove URLs\n",
+        "    text = re.sub(r\"http\\S+|www\\S+|https\\S+\", '', text)\n",
+        "    # Remove mentions and hashtags\n",
+        "    text = re.sub(r'@\\w+|#', '', text)\n",
+        "    # Remove non-alphabetic characters\n",
+        "    text = re.sub(r'[^a-zA-Z\\s]', '', text)\n",
+        "    # Remove stopwords\n",
+        "    text = \" \".join(word for word in text.split() if word not in stop_words)\n",
+        "    return text\n",
+        "\n",
+        "# New tweet to predict\n",
+        "new_tweet = \"You're so dumb, nobody likes you!\"\n",
+        "\n",
+        "# Preprocess the tweet\n",
+        "processed_tweet = preprocess_text(new_tweet)\n",
+        "\n",
+        "# Vectorize the preprocessed tweet\n",
+        "vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "# Predict the label\n",
+        "prediction = model.predict(vectorized_tweet)\n",
+        "\n",
+        "# Output the prediction\n",
+        "print(\"Prediction:\", prediction[0])  # Output will be 'cyberbullying' or 'non-cyberbullying'"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "MVZEoyH-JUwN",
+        "outputId": "3342997d-b541-4dc6-8e67-81498b7a6c4d"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prediction: ethnicity\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(data['cyberbullying_type'].unique())"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "HipTULhIJxRL",
+        "outputId": "001a2b14-f130-43d5-b0bc-46b9d421c2e8"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "['not_cyberbullying' 'gender' 'religion' 'other_cyberbullying' 'age'\n",
+            " 'ethnicity']\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "Q_QMxbtCKlyi"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "data['cyberbullying_type']=data['cyberbullying_type'].replace({'ethnicity':'non-cyberbullying'})"
+      ],
+      "metadata": {
+        "id": "TMBiD2WPKJ2r"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "label_mapping={'ethnicity':'non-cyberbullying',\n",
+        "               'cyberbullying':'cyberbullying'\n",
+        "               }\n",
+        "prediction=model.predict(vectorized_tweet)\n",
+        "mapped_prediction=label_mapping.get(prediction[0],\"unknown\")\n",
+        "print(\"Mapped prediction:\",mapped_prediction)\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "dkfzdw9IKnQd",
+        "outputId": "4c482fab-f480-4d67-b73e-fc0bd735907c"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Mapped prediction: non-cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "x=data['tweet_text']\n",
+        "y=data['cyberbullying_type']"
+      ],
+      "metadata": {
+        "id": "GI_O5hrALrvW"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Predict new tweet\n",
+        "new_tweet = \"You're so dumb, nobody likes you!\"\n",
+        "processed_tweet = preprocess_text(new_tweet)\n",
+        "vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "# Make the prediction\n",
+        "prediction = model.predict(vectorized_tweet)\n",
+        "print(\"Prediction:\", prediction[0])  # Expected output: 'cyberbullying' or 'non-cyberbullying'"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "U_WYDLIIL_w0",
+        "outputId": "d30b307d-3091-4802-a90b-24d5c281879b"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prediction: ethnicity\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(data['cyberbullying_type'].unique())"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "zA7hjt7YMRn0",
+        "outputId": "5f831be2-e05c-4bc6-b635-b59756ecafab"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "['not_cyberbullying' 'gender' 'religion' 'other_cyberbullying' 'age'\n",
+            " 'non-cyberbullying']\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+        "from sklearn.linear_model import LogisticRegression\n",
+        "\n",
+        "# Split data into features and labels\n",
+        "X = data['tweet_text']  # Tweets\n",
+        "y = data['cyberbullying_type']  # Labels ('cyberbullying' or 'non-cyberbullying')\n",
+        "\n",
+        "# Split the data into training and testing sets\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# Vectorize the text data using TF-IDF\n",
+        "vectorizer = TfidfVectorizer(max_features=5000)\n",
+        "X_train_tfidf = vectorizer.fit_transform(X_train)\n",
+        "X_test_tfidf = vectorizer.transform(X_test)\n",
+        "\n",
+        "# Train the model (e.g., Logistic Regression)\n",
+        "model = LogisticRegression()\n",
+        "model.fit(X_train_tfidf, y_train)\n",
+        "\n",
+        "# Save the model and vectorizer after training\n",
+        "import joblib\n",
+        "joblib.dump(model, 'cyberbully_classifier.pkl')\n",
+        "joblib.dump(vectorizer, 'tfidf_vectorizer.pkl')\n",
+        "\n",
+        "print(\"Model and vectorizer saved successfully!\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "4gC3QxNKMvWU",
+        "outputId": "2e54ab5b-2e4e-4fc6-a7ff-bcccfcb85a29"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Model and vectorizer saved successfully!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Load the saved model and vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n",
+        "# New tweet to predict\n",
+        "new_tweet = \"You're such a loser, no one will ever like you!\"\n",
+        "\n",
+        "# Preprocess the tweet (using the same preprocessing function as before)\n",
+        "processed_tweet = preprocess_text(new_tweet)\n",
+        "\n",
+        "# Vectorize the preprocessed tweet\n",
+        "vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "# Make the prediction\n",
+        "prediction = model.predict(vectorized_tweet)\n",
+        "\n",
+        "# Output the prediction\n",
+        "print(\"Prediction:\", prediction[0])  # Expected output: 'cyberbullying' or 'non-cyberbullying'"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "WiNSnqqJNGoc",
+        "outputId": "44d9f53b-4cbb-4eaa-fc66-22bde2c20cc1"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prediction: other_cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(data['cyberbullying_type'].unique())"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "gkpZ4eTUNbU9",
+        "outputId": "51b22cf2-a4b0-4375-cbe6-c1fe81daa300"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "['not_cyberbullying' 'gender' 'religion' 'other_cyberbullying' 'age'\n",
+            " 'non-cyberbullying']\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "data['cyberbullying_type']=data['cyberbullying_type'].replace({'other_cyberbullying':'cyberbullying'})"
+      ],
+      "metadata": {
+        "id": "yCTc5Cd3NvZt"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+        "from sklearn.linear_model import LogisticRegression\n",
+        "\n",
+        "# Split data into features and labels\n",
+        "X = data['tweet_text']  # Tweets\n",
+        "y = data['cyberbullying_type']  # Labels ('cyberbullying' or 'non-cyberbullying')\n",
+        "\n",
+        "# Split the data into training and testing sets\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n",
+        "\n",
+        "# Vectorize the text data using TF-IDF\n",
+        "vectorizer = TfidfVectorizer(max_features=5000)\n",
+        "X_train_tfidf = vectorizer.fit_transform(X_train)\n",
+        "X_test_tfidf = vectorizer.transform(X_test)\n",
+        "\n",
+        "# Train the model (e.g., Logistic Regression)\n",
+        "model = LogisticRegression()\n",
+        "model.fit(X_train_tfidf, y_train)\n",
+        "\n",
+        "# Save the model and vectorizer after training\n",
+        "import joblib\n",
+        "joblib.dump(model, 'cyberbully_classifier.pkl')\n",
+        "joblib.dump(vectorizer, 'tfidf_vectorizer.pkl')\n",
+        "\n",
+        "print(\"Model and vectorizer saved successfully!\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Pbvexmo2OQCF",
+        "outputId": "39543fe1-417f-4103-90a4-f8d1723bad03"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Model and vectorizer saved successfully!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Load the saved model and vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n",
+        "# New tweet to predict\n",
+        "new_tweet = \"You're such a loser, no one will ever like you!\"\n",
+        "\n",
+        "# Preprocess the tweet (using the same preprocessing function as before)\n",
+        "processed_tweet = preprocess_text(new_tweet)\n",
+        "\n",
+        "# Vectorize the preprocessed tweet\n",
+        "vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "# Make the prediction\n",
+        "prediction = model.predict(vectorized_tweet)\n",
+        "\n",
+        "# Output the prediction\n",
+        "print(\"Prediction:\", prediction[0])  # Expected output: 'cyberbullying' or 'non-cyberbullying'"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "uh9qQZ2mOiFo",
+        "outputId": "b7b9098f-0882-4e1f-c363-c149c6135ff3"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prediction: cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "new_tweets = [\n",
+        "    \"You're worthless and nobody cares about you\",\n",
+        "    \"I hope you have a wonderful day!\",\n",
+        "    \"You're such a loser, no one will ever like you\"\n",
+        "]\n",
+        "\n",
+        "# Preprocess and predict for each tweet\n",
+        "for tweet in new_tweets:\n",
+        "    processed_tweet = preprocess_text(tweet)\n",
+        "    vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "    prediction = model.predict(vectorized_tweet)\n",
+        "    print(f\"Tweet: {tweet}\\nPrediction: {prediction[0]}\\n\")\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "HjYZALSfPZ3s",
+        "outputId": "c34af5d5-e8ee-47a1-e266-2b5dee92a803"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Tweet: You're worthless and nobody cares about you\n",
+            "Prediction: not_cyberbullying\n",
+            "\n",
+            "Tweet: I hope you have a wonderful day!\n",
+            "Prediction: not_cyberbullying\n",
+            "\n",
+            "Tweet: You're such a loser, no one will ever like you\n",
+            "Prediction: cyberbullying\n",
+            "\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.metrics import accuracy_score\n",
+        "\n",
+        "# Predict on the test set\n",
+        "y_pred = model.predict(X_test_tfidf)\n",
+        "\n",
+        "# Calculate accuracy\n",
+        "accuracy = accuracy_score(y_test, y_pred)\n",
+        "print(f\"Accuracy: {accuracy * 100:.2f}%\")\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "_gGDhYaXRDbV",
+        "outputId": "0bcb6bf2-bb69-4cc5-f191-c8b650e98fb3"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Accuracy: 80.73%\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.metrics import classification_report\n",
+        "\n",
+        "# Classification report\n",
+        "print(\"Classification Report:\\n\", classification_report(y_test, y_pred))\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "NVIV4O3VRXbu",
+        "outputId": "278325ce-8bef-4421-e34a-c943da84a001"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Classification Report:\n",
+            "                    precision    recall  f1-score   support\n",
+            "\n",
+            "              age       0.95      0.97      0.96      1603\n",
+            "    cyberbullying       0.58      0.64      0.61      1612\n",
+            "           gender       0.88      0.81      0.84      1531\n",
+            "non-cyberbullying       0.98      0.96      0.97      1603\n",
+            "not_cyberbullying       0.55      0.55      0.55      1624\n",
+            "         religion       0.95      0.93      0.94      1566\n",
+            "\n",
+            "         accuracy                           0.81      9539\n",
+            "        macro avg       0.81      0.81      0.81      9539\n",
+            "     weighted avg       0.81      0.81      0.81      9539\n",
+            "\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import seaborn as sns\n",
+        "import matplotlib.pyplot as plt\n",
+        "from sklearn.metrics import confusion_matrix\n",
+        "\n",
+        "# Confusion Matrix\n",
+        "cm = confusion_matrix(y_test, y_pred)\n",
+        "sns.heatmap(cm, annot=True, fmt=\"d\", cmap=\"Blues\", xticklabels=[\"cyberbullying\", \"non-cyberbullying\"], yticklabels=[\"cyberbullying\", \"non-cyberbullying\"])\n",
+        "plt.xlabel('Predicted')\n",
+        "plt.ylabel('True')\n",
+        "plt.title('Confusion Matrix')\n",
+        "plt.show()\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 583
+        },
+        "id": "y-F5T2_rRmXI",
+        "outputId": "78260f0f-1479-4773-e285-bf91061b6e80"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<Figure size 640x480 with 2 Axes>"
+            ],
+            "image/png": "iVBORw0KGgoAAAANSUhEUgAAApMAAAI2CAYAAAAMxwOgAAAAOXRFWHRTb2Z0d2FyZQBNYXRwbG90bGliIHZlcnNpb24zLjguMCwgaHR0cHM6Ly9tYXRwbG90bGliLm9yZy81sbWrAAAACXBIWXMAAA9hAAAPYQGoP6dpAACQD0lEQVR4nOzddVhUaRsG8Hvo7lYpA7sLscUu1F1XxcB2V+xAXbtQ7HYtjLV7jVVR7ERdGxETlVSkG+b7g8/REcZRHDgj3L+95lrmfd9z5jkjAw9vHZFYLBaDiIiIiCgPVIQOgIiIiIh+XkwmiYiIiCjPmEwSERERUZ4xmSQiIiKiPGMySURERER5xmSSiIiIiPKMySQRERER5RmTSSIiIiLKMyaTRERERJRnTCaJiHIRHByMFi1awNDQECKRCIcOHVLo+V++fAmRSITNmzcr9Lw/s8aNG6Nx48ZCh0FE34nJJBEprWfPnmHw4MFwdHSElpYWDAwM4OLigmXLliE5OTlfX7tPnz64f/8+5syZg23btqFmzZr5+noFycPDAyKRCAYGBrm+j8HBwRCJRBCJRFi4cOF3nz80NBTTp0/HnTt3FBAtESk7NaEDICLKzbFjx/Drr79CU1MTvXv3RsWKFZGWloZLly5h3LhxePjwIdatW5cvr52cnIyrV6/izz//hKenZ768hp2dHZKTk6Gurp4v55dHTU0NSUlJOHLkCLp27SpVt337dmhpaSElJSVP5w4NDcWMGTNgb2+PqlWrfvNxp06dytPrEZGwmEwSkdJ58eIFunXrBjs7O/j7+8Pa2lpSN3ToUDx9+hTHjh3Lt9ePiooCABgZGeXba4hEImhpaeXb+eXR1NSEi4sLdu7cmSOZ3LFjB9q2bYv9+/cXSCxJSUnQ0dGBhoZGgbweESkWh7mJSOn4+PggISEBGzdulEokPypVqhRGjBgheZ6RkYFZs2ahZMmS0NTUhL29PSZNmoTU1FSp4+zt7dGuXTtcunQJtWvXhpaWFhwdHbF161ZJm+nTp8POzg4AMG7cOIhEItjb2wPIHh7++PXnpk+fDpFIJFXm5+eH+vXrw8jICHp6enBycsKkSZMk9bLmTPr7+6NBgwbQ1dWFkZEROnbsiMDAwFxf7+nTp/Dw8ICRkREMDQ3Rt29fJCUlyX5jv9CjRw/8+++/iImJkZQFBAQgODgYPXr0yNE+OjoaY8eORaVKlaCnpwcDAwO0bt0ad+/elbQ5d+4catWqBQDo27evZLj843U2btwYFStWxK1bt9CwYUPo6OhI3pcv50z26dMHWlpaOa6/ZcuWMDY2Rmho6DdfKxHlHyaTRKR0jhw5AkdHR9SrV++b2g8YMABTp05F9erVsWTJEjRq1Aje3t7o1q1bjrZPnz7FL7/8gubNm2PRokUwNjaGh4cHHj58CADo3LkzlixZAgDo3r07tm3bhqVLl35X/A8fPkS7du2QmpqKmTNnYtGiRejQoQMuX7781eNOnz6Nli1bIjIyEtOnT8fo0aNx5coVuLi44OXLlznad+3aFfHx8fD29kbXrl2xefNmzJgx45vj7Ny5M0QiEQ4cOCAp27FjB8qWLYvq1avnaP/8+XMcOnQI7dq1w+LFizFu3Djcv38fjRo1kiR25cqVw8yZMwEAgwYNwrZt27Bt2zY0bNhQcp7379+jdevWqFq1KpYuXYomTZrkGt+yZctgbm6OPn36IDMzEwDw119/4dSpU1ixYgVsbGy++VqJKB+JiYiUSGxsrBiAuGPHjt/U/s6dO2IA4gEDBkiVjx07VgxA7O/vLymzs7MTAxBfuHBBUhYZGSnW1NQUjxkzRlL24sULMQDxggULpM7Zp08fsZ2dXY4Ypk2bJv78x+mSJUvEAMRRUVEy4/74Gr6+vpKyqlWrii0sLMTv37+XlN29e1esoqIi7t27d47X69evn9Q5O3XqJDY1NZX5mp9fh66urlgsFot/+eUXcbNmzcRisVicmZkptrKyEs+YMSPX9yAlJUWcmZmZ4zo0NTXFM2fOlJQFBATkuLaPGjVqJAYgXrt2ba51jRo1kio7efKkGIB49uzZ4ufPn4v19PTEbm5ucq+RiAoOeyaJSKnExcUBAPT19b+p/fHjxwEAo0ePliofM2YMAOSYW1m+fHk0aNBA8tzc3BxOTk54/vx5nmP+0se5locPH0ZWVtY3HRMWFoY7d+7Aw8MDJiYmkvLKlSujefPmkuv83JAhQ6SeN2jQAO/fv5e8h9+iR48eOHfuHMLDw+Hv74/w8PBch7iB7HmWKirZvzYyMzPx/v17yRD+7du3v/k1NTU10bdv329q26JFCwwePBgzZ85E586doaWlhb/++uubX4uI8h+TSSJSKgYGBgCA+Pj4b2r/6tUrqKiooFSpUlLlVlZWMDIywqtXr6TKbW1tc5zD2NgYHz58yGPEOf32229wcXHBgAEDYGlpiW7dumHPnj1fTSw/xunk5JSjrly5cnj37h0SExOlyr+8FmNjYwD4rmtp06YN9PX1sXv3bmzfvh21atXK8V5+lJWVhSVLlqB06dLQ1NSEmZkZzM3Nce/ePcTGxn7zaxYrVuy7FtssXLgQJiYmuHPnDpYvXw4LC4tvPpaI8h+TSSJSKgYGBrCxscGDBw++67gvF8DIoqqqmmu5WCzO82t8nM/3kba2Ni5cuIDTp0+jV69euHfvHn777Tc0b948R9sf8SPX8pGmpiY6d+6MLVu24ODBgzJ7JQFg7ty5GD16NBo2bIi///4bJ0+ehJ+fHypUqPDNPbBA9vvzPf777z9ERkYCAO7fv/9dxxJR/mMySURKp127dnj27BmuXr0qt62dnR2ysrIQHBwsVR4REYGYmBjJymxFMDY2llr5/NGXvZ8AoKKigmbNmmHx4sV49OgR5syZA39/f5w9ezbXc3+MMygoKEfd48ePYWZmBl1d3R+7ABl69OiB//77D/Hx8bkuWvpo3759aNKkCTZu3Ihu3bqhRYsWcHV1zfGefGti/y0SExPRt29flC9fHoMGDYKPjw8CAgIUdn4i+nFMJolI6YwfPx66uroYMGAAIiIictQ/e/YMy5YtA5A9TAsgx4rrxYsXAwDatm2rsLhKliyJ2NhY3Lt3T1IWFhaGgwcPSrWLjo7OcezHzbu/3K7oI2tra1StWhVbtmyRSs4ePHiAU6dOSa4zPzRp0gSzZs3CypUrYWVlJbOdqqpqjl7PvXv34u3bt1JlH5Pe3BLv7+Xl5YWQkBBs2bIFixcvhr29Pfr06SPzfSSigsdNy4lI6ZQsWRI7duzAb7/9hnLlykndAefKlSvYu3cvPDw8AABVqlRBnz59sG7dOsTExKBRo0a4ceMGtmzZAjc3N5nbzuRFt27d4OXlhU6dOmH48OFISkrCmjVrUKZMGakFKDNnzsSFCxfQtm1b2NnZITIyEqtXr0bx4sVRv359medfsGABWrduDWdnZ/Tv3x/JyclYsWIFDA0NMX36dIVdx5dUVFQwefJkue3atWuHmTNnom/fvqhXrx7u37+P7du3w9HRUapdyZIlYWRkhLVr10JfXx+6urqoU6cOHBwcvisuf39/rF69GtOmTZNsVeTr64vGjRtjypQp8PHx+a7zEVH+YM8kESmlDh064N69e/jll19w+PBhDB06FBMmTMDLly+xaNEiLF++XNJ2w4YNmDFjBgICAjBy5Ej4+/tj4sSJ2LVrl0JjMjU1xcGDB6Gjo4Px48djy5Yt8Pb2Rvv27XPEbmtri02bNmHo0KFYtWoVGjZsCH9/fxgaGso8v6urK06cOAFTU1NMnToVCxcuRN26dXH58uXvTsTyw6RJkzBmzBicPHkSI0aMwO3bt3Hs2DGUKFFCqp26ujq2bNkCVVVVDBkyBN27d8f58+e/67Xi4+PRr18/VKtWDX/++aekvEGDBhgxYgQWLVqEa9euKeS6iOjHiMTfM1ObiIiIiOgz7JkkIiIiojxjMklEREREecZkkoiIiIjyjMkkEREREeUZk0kiIiIiyjMmk0RERESUZ0wmiYiIiCjPeAccUira1TyFDkEpvL++QugQlIaKiuLu80w/v6wsbo0M8HPxkVYBZDGK+r2U/N9KhZxHGbFnkoiIiIjyjD2TRERERLKI2O8mD5NJIiIiIllEnFIgD5NJIiIiIlnYMykX3yEiIiIiyjP2TBIRERHJwmFuuZhMEhEREcnCYW65+A4RERERUZ6xZ5KIiIhIFg5zy8VkkoiIiEgWDnPLxXeIiIiIiPKMPZNEREREsnCYWy4mk0RERESycJhbLr5DRERERJRn7JkkIiIikoXD3HIxmSQiIiKShcPccjGZJCIiIpKFPZNyMd0mIiIiojxjzyQRERGRLBzmlovJJBEREZEsTCbl4jtERERERHnGnkkiIiIiWVS4AEceJpNEREREsnCYWy6+Q3lgb2+PpUuX5su5GzdujJEjR/7QOV6+fAmRSIQ7d+4AAM6dOweRSISYmJg8HU9EREQkC3smKYcSJUogLCwMZmZmQoeSJy7VS2JUb1dUL28La3NDdB21DkfO3ZPUr5vRE7061JU65tTlR+jouVry/PGxGbCzMZVqM2X5YSz09ZM8r1jaBksndEWNCnZ49yEBa3adx+Itp/PpqvLHxg1/wf+0H16+eA5NLS1UqVINI0aNgb2Do6TN/r278e/xo3gc+AiJiYm4cPkG9A0MBIy6YERERGDp4gW4fPEiUlKSUcLWDjNnz0WFipWEDq1A3boZgM2bNiLw0QNERUVhyfJVaNrMVeiw8pW8z0VsbAzWrFqBa1cvIzwsDMbGJmjctBn+8BwBfX19gaPPX3t27cCe3TsR+vYtAKBkqdIY/PsfqN+gkcCR5SPuMykXk0klkZaWBg0NDaHDAACoqqrCyspK6DDyTFdbE/efvMXWw1exe/GgXNucvPwQg6f9LXmempaRo82M1Ufhe+Cy5Hl8Yqrka31dLRxZ7Ymz1x9j2JxdqFi6GNZOc0dMfDI2fXaMsrt9MwC/deuBChUrISMzEyuXLcHvgwfgwKGj0NbRAQCkpKSgnksD1HNpgBXLFgscccGIi42FR8/uqFm7DlatXQ9jE2OEvHoFAwNDoUMrcMnJSXBycoJb5y4YPcJT6HAKhLzPRVRkJKKiIjFqzHg4liyFsNBQzJk1DVFRkVi4eLnQ4ecrC0srjBg1FrZ2dhCLxThy+BBGeA7F7v0HUapUaaHDyx8c5paryL5DWVlZ8PHxQalSpaCpqQlbW1vMmTMHTZs2haen9A/MqKgoaGho4MyZM5Ky+Ph4dO/eHbq6uihWrBhWrVoldUxMTAwGDBgAc3NzGBgYoGnTprh7966kfvr06ahatSo2bNgABwcHaGlpSeoyMjLg6ekJQ0NDmJmZYcqUKRCLxZJ6kUiEQ4cOSb2ekZERNm/eLPe6ExMTYWBggH379kmVHzp0CLq6uoiPj5c5TH7mzBnUrFkTOjo6qFevHoKCgqTOMXv2bFhYWEBfXx8DBgzAhAkTULVqVbkxKdqpy48wY/VR/HP2nsw2aWkZiHgfL3nExCfnaJOQmCLVJiklTVLXrU1NaKirYvD07Qh8Ho69J29h9a5zGN6zSb5cU35ZtXYDOrh1RslSpeHkVBYzZnsjPCwUjx49lLRx79UH/QYMQuUqVQSMtGBt2rgellZWmDXHG5UqV0bx4iVQz6U+StjaCh1agavfoBE8R4xCM9fmQodSYOR9LkqVLoNFS1agUeOmKFHCFrXr1IXnsFG4cO4sMjJy/mFamDRu0hQNGjaCnZ097O0dMGzEKOjo6ODe3TtCh0YCKrLJ5MSJEzFv3jxMmTIFjx49wo4dO2BpaYkBAwZgx44dSE391Av1999/o1ixYmjatKmkbMGCBahSpQr+++8/TJgwASNGjICf36ch0F9//RWRkZH4999/cevWLVSvXh3NmjVDdHS0pM3Tp0+xf/9+HDhwQGp+4pYtW6CmpoYbN25g2bJlWLx4MTZs2KCQ69bV1UW3bt3g6+srVe7r64tffvnlq0M0f/75JxYtWoSbN29CTU0N/fr1k9Rt374dc+bMwfz583Hr1i3Y2tpizZo1Cok5PzSoWRqvznjj7sEpWDbpN5gY6uZoM6ZvC7w5Ox9Xd3phVO9mUFX99HGpU9kBl28/RXpGpqTM70ognBysYKSvXSDXkB8SEuIBAIaGRa8H7nPnz/qjQoWKGDtqOBo3cEbXLm7Yv3eP0GGRQL7lcxGfEA9dPT2oqRWdAb/MzEz8e/wYkpOTUKVKNaHDyT8ikWIehVjR+a7/THx8PJYtW4aVK1eiT58+AICSJUuifv36SElJgaenJw4fPoyuXbsCADZv3gwPDw+IPvtmcHFxwYQJEwAAZcqUweXLl7FkyRI0b94cly5dwo0bNxAZGQlNTU0AwMKFC3Ho0CHs27cPgwZlD72mpaVh69atMDc3l4qvRIkSWLJkCUQiEZycnHD//n0sWbIEAwcOVMj1DxgwAPXq1UNYWBisra0RGRmJ48eP4/Tpr8/3mzNnDho1yp4XM2HCBLRt2xYpKSnQ0tLCihUr0L9/f/Tt2xcAMHXqVJw6dQoJCQkKiVmR/K4E4rD/Xbx8+x6Oxc0wY1h7HF75Oxr1WYSsrOwe4NU7z+O/wNf4EJeIulUcMXNYB1iZG8Jr0QEAgKWpAV6+fS913sjo7F84lmYGufZ0KrusrCwsnD8XVatVR6nSZYQOR1Bv3rzGnt070atPX/QfNAQP79/HfO/ZUFdXRwe3TkKHRwXoWz4XHz58wPq/1qDLL10LODphBD8JQq8e3ZCWlgodHR0sWb4KJUuVEjqs/MNhbrmK5DsUGBiI1NRUNGvWLEedlpYWevXqhU2bNgEAbt++jQcPHsDDw0OqnbOzc47ngYGBAIC7d+8iISEBpqam0NPTkzxevHiBZ8+eSY6xs7PLkUgCQN26daUSV2dnZwQHByMzMzNH27yoXbs2KlSogC1btgDI7nm1s7NDw4YNv3pc5cqVJV9bW1sDACIjIwEAQUFBqF27do7X+ZrU1FTExcVJPcRZirnGr9l78haOnb+Ph09DceTcPXQevhY1K9qjYc1P832W/+2Pi7eC8SA4FBv2XcKExQfw+2+NoKFeeP/+8p4zE0+fBmOeT9GYF/k1WVlilCtfAcNHjka5cuXxS9ff0PmXrti7Z5fQoVEBk/e5SEhIwPChg+HoWBKDfy8ac0rt7R2wZ/8h/L1zD379rTumTPLCs6dPhQ4r/7BnUq4imUxqa399GHLAgAHw8/PDmzdv4Ovri6ZNm8LOzu6bz5+QkABra2vcuXNH6hEUFIRx48ZJ2unq5hxa/RYikUhqDiUApKenf9c5BgwYIJlj6evri759+0olsLlRV1eXigHI/qs9r7y9vWFoaCj1yIi4lefz5dXLt+8R9SEeJUvkTOw/Crj/EurqqrCzMQEARLyPg6Wp9JQAC5Ps5xHv4vIv2Hwyb85MXDx/Dus3boXlT7z4SlHMzc3hWLKkVJmjoyPCwkIFioiEIO9zkZiYgKFDBkBHRxeLl62U+hlZmKlraMDWzg7lK1TEiFFjUMapLLb/vVXosEhARTKZLF26NLS1taUW1HyuUqVKqFmzJtavX48dO3ZIzQ386Nq1azmelytXDgBQvXp1hIeHQ01NDaVKlZJ6fMt2O9evX89x7tKlS0NVVRVA9i+6sLAwSX1wcDCSkpLknvdzPXv2xKtXr7B8+XI8evRIMtyfV05OTggICJAq+/L5lyZOnIjY2Fiph5pljR+KIy+KWRjB1FAX4V9JAqs4FUdmZhai/j+Uff3eC7hULwU1tU8foWZ1yyLoRfhPNcQtFosxb85M+Pufxl8bN6NY8eJCh6QUqlarjpcvXkiVvXr5EjY2xQSKiArSt3wuEhIS8Pug/lBXV8fSFaslU5qKoqysLKSnpclv+LMSqSjm8Z0uXLiA9u3bw8bGJteFt58bMmQIRCJRjj2wo6Oj4e7uDgMDAxgZGaF///45pp/du3cPDRo0gJaWFkqUKAEfH5/vjrXwjtl9hZaWFry8vDB+/HhoaGjAxcUFUVFRePjwIfr37w8gu+fO09MTurq66NQp5xypy5cvw8fHB25ubvDz88PevXtx7NgxAICrqyucnZ3h5uYGHx8flClTBqGhoTh27Bg6deqEmjVrfjW+kJAQjB49GoMHD8bt27exYsUKLFq0SFLftGlTrFy5Es7OzsjMzISXl9d3/0VsbGyMzp07Y9y4cWjRogWK/2ASMWzYMAwcOBA1a9ZEvXr1sHv3bty7dw+Ojo4yj9HU1MzxA1ikovpDcQCArraGVC+jfTFTVC5TDB/ikhAdm4g/B7fBoTN3EP4uDo4lzDBnhBuevX4HvyvZ0xTqVHZArYp2OH8zGPGJKahb2QHzx3bBzuMBkkRx9783MWlQG6yd5o5Fvn6oUMoGQ3s0xviFB344/oLkPWcm/j1+FEuWrYKuri7evYsCAOjp6Ut2GHj3Lgrv371DSEgIACA4+Al0dXVhZW0NQ0MjoULPVz1790Gfnt2xYd1atGjZGg/u38O+fXswdfpMoUMrcEmJiZJ/ewB4++YNHgcGwtDQENY2NgJGln/kfS4SEhLwx+D+SElOxpx5C5CYmIDExOxf0MbGJpI//AujZUsWoX6DhrCytkZSYiKOHzuKmwE3sGbdRqFDyz8CDVEnJiaiSpUq6NevHzp37iyz3cGDB3Ht2jXY5PJ5dHd3R1hYGPz8/JCeno6+ffti0KBB2LFjBwAgLi4OLVq0gKurK9auXYv79++jX79+MDIykqzv+BZFMpkEgClTpkBNTQ1Tp05FaGgorK2tMWTIEEl99+7dMXLkSHTv3l1q256PxowZg5s3b2LGjBkwMDDA4sWL0bJlSwDZQ8DHjx/Hn3/+ib59+yIqKgpWVlZo2LAhLC0t5cbWu3dvJCcno3bt2lBVVcWIESOk/lEXLVqEvn37okGDBrCxscGyZctw69b3Dw/3799fZs/r93J3d8fz588xduxYpKSkoGvXrvDw8MCNGzd++Nzfq3p5O5zaMELy3GdsFwDAtn+uYfjc3ahYuhjc29eBkb42wqJicfrqY8xcfRRp6dlbeqSmpePXljXw55A20FRXw8vQ91ix/SyWb/OXnDMuIQXt/1iJpRO64soOL7yPSYD3un9/qj0mAWDv7p0AgIH9ekuVz5g1Fx3csn947duzC3+t+bT1VX+PnjnaFDYVK1XG4mUrsXzpYvy1ZhWKFS+O8V6T0LZdB6FDK3APHz7AgL6fvj8W+ngDADp07IRZc+cJFVa+kve5eBz4EPfvZW/11qFNC6k2x06chk2xwtvDHx39HpMneiEqKhJ6+vooU8YJa9ZthHM9F6FDK3Rat26N1q1bf7XN27dvMWzYMJw8eRJt27aVqgsMDMSJEycQEBAg6cRasWIF2rRpg4ULF8LGxgbbt29HWloaNm3aBA0NDVSoUAF37tzB4sWLvyuZFIm/nHxHALJvKViyZEkEBASgevXqQoeTL7Zt24ZRo0YhNDQ0XzZMb968OaysrLBt27ZvPka7WtGYwC7P++srhA5BaaioFO6J6/R9Pu64UNTxc5FNqwC6xLTbLFPIeWIODpHadhDIfYQuNyKRCAcPHoSbm5ukLCsrC66urujYsSNGjBgBe3t7jBw5UnJL5k2bNmHMmDH48OGD5JiMjAxoaWlh79696NSpE3r37o24uDipIfSzZ8+iadOmiI6OhrGx8TddW5GcM/k16enpCA8Px+TJk1G3bt1CmUgmJSXh2bNnmDdvHgYPHqyQRDIpKQmLFy/Gw4cP8fjxY0ybNg2nT5/+4bmYREREglLQau7cFp16e3vnOaz58+dDTU0Nw4cPz7U+PDwcFhYWUmVqamowMTFBeHi4pM2XI6Yfn39s8y2YTH7h8uXLsLa2RkBAANauXSt0OPnCx8cHZcuWhZWVFSZOnKiQc34c2m/YsCFq1KiBI0eOYP/+/XB1Ldz38CUiIvoWuS06zevv4Fu3bmHZsmXYvHmz3J1YCkKRnTMpS+PGjXNsu1PYTJ8+HdOnT1foObW1teVuek5ERPTTUdCm5d86pP0tLl68iMjISNh+dovXzMxMjBkzBkuXLsXLly9hZWUl2Qv6o4yMDERHR8Pq/1tdWVlZISIiQqrNx+dW37FNHHsmiYiIiGQRaGugr+nVqxfu3bsntZe1jY0Nxo0bh5MnTwLIvuFJTEyM1AJdf39/ZGVloU6dOpI2Fy5ckNqr2s/PD05OTt88XxJgzyQRERGR0klISMDTz+4s9OLFC9y5cwcmJiawtbWFqampVHt1dXVYWVnByckJAFCuXDm0atUKAwcOxNq1a5Geng5PT09069ZNso1Qjx49MGPGDPTv3x9eXl548OABli1bhiVLlnxXrEwmiYiIiGQRaE7izZs30aRJE8nz0aNHAwD69OkjuYOdPNu3b4enpyeaNWsGFRUVdOnSBcuXL5fUGxoa4tSpUxg6dChq1KgBMzMzTJ069bu2BQK4NRApGW4NlI1bA33CLVDoc9waKBs/F9kKZGugjn8p5DzJhwcr5DzKiD2TRERERLIowWppZccFOERERESUZ+yZJCIiIpJFwSuxCyMmk0RERESycJhbLqbbRERERJRn7JkkIiIikkEZbleo7JhMEhEREcnAZFI+DnMTERERUZ6xZ5KIiIhIFnZMysVkkoiIiEgGDnPLx2FuIiIiIsoz9kwSERERycCeSfmYTBIRERHJwGRSPiaTRERERDIwmZSPcyaJiIiIKM/YM0lEREQkCzsm5WIySURERCQDh7nl4zA3EREREeUZeyaJiIiIZGDPpHxMJkmpRN9YKXQISqHp4gtCh6A0jg9zEToEpaClrip0CErh7JMooUNQCk2czIUOQUnkf6LHZFI+DnMTERERUZ6xZ5KIiIhIBvZMysdkkoiIiEgW5pJycZibiIiIiPKMPZNEREREMnCYWz4mk0REREQyMJmUj8kkERERkQxMJuXjnEkiIiIiyjP2TBIRERHJwo5JuZhMEhEREcnAYW75OMxNRERERHnGnkkiIiIiGdgzKR+TSSIiIiIZmEzKx2FuIiIiIsoz9kwSERERycCeSfmYTBIRERHJwlxSLg5zExERESmZCxcuoH379rCxsYFIJMKhQ4ckdenp6fDy8kKlSpWgq6sLGxsb9O7dG6GhoVLniI6Ohru7OwwMDGBkZIT+/fsjISFBqs29e/fQoEEDaGlpoUSJEvDx8fnuWJlMEhEREckgEokU8vheiYmJqFKlClatWpWjLikpCbdv38aUKVNw+/ZtHDhwAEFBQejQoYNUO3d3dzx8+BB+fn44evQoLly4gEGDBknq4+Li0KJFC9jZ2eHWrVtYsGABpk+fjnXr1n1XrBzmJiIiIpJBqDmTrVu3RuvWrXOtMzQ0hJ+fn1TZypUrUbt2bYSEhMDW1haBgYE4ceIEAgICULNmTQDAihUr0KZNGyxcuBA2NjbYvn070tLSsGnTJmhoaKBChQq4c+cOFi9eLJV0ysOeSSIiIiIZhOqZ/F6xsbEQiUQwMjICAFy9ehVGRkaSRBIAXF1doaKiguvXr0vaNGzYEBoaGpI2LVu2RFBQED58+PDNr82eSSIiIqJ8lpqaitTUVKkyTU1NaGpq/vC5U1JS4OXlhe7du8PAwAAAEB4eDgsLC6l2ampqMDExQXh4uKSNg4ODVBtLS0tJnbGx8Te9PnsmiYiIiGQRKebh7e0NQ0NDqYe3t/cPh5eeno6uXbtCLBZjzZo1P3y+vGDPJBEREZEMihqinjhxIkaPHi1V9qO9kh8TyVevXsHf31/SKwkAVlZWiIyMlGqfkZGB6OhoWFlZSdpERERItfn4/GObb8GeyTz4com+Itnb22Pp0qU/dI5z585BJBIhJiYGALB582bJHIq8HE9EREQ/RlNTEwYGBlKPH0kmPyaSwcHBOH36NExNTaXqnZ2dERMTg1u3bknK/P39kZWVhTp16kjaXLhwAenp6ZI2fn5+cHJy+uYhboA9k5SLevXqISwsDIaGhkKHkm9u3QzAFt+NCHz0AFFRUVi8bBWaNnOV1J/xO4W9e3Yh8NFDxMbGYNe+QyhbtpyAEX+/qsUN4V6nOJws9WCurwmvAw9xIfi9VJuB9e3QoYoV9DXVcO9tHHxOBePNhxQAgJWBJvq52KGGrRFMddURlZCGk48isflKCDKyxACA/i52GFDfLsdrJ6dloumSy/l/kQri1sYV4WGhOcq7dO2OcROnSJ6LxWKM8hyMa1cuYf7i5WjUxDXHMT+zovC5kOfMgb9xbPtfaND2V3TqNxzRkWGY/XvXXNv2HjMTVes1kSpLjI/FwtF9ERsdhTlbj0NbV78gws43t24GYKvvRjx69BDvoqKweNlKNPnse2LqnxNw5PAhqWPqudTHqr82FHCk+Ueo1dwJCQl4+vSp5PmLFy9w584dmJiYwNraGr/88gtu376No0ePIjMzUzIP0sTEBBoaGihXrhxatWqFgQMHYu3atUhPT4enpye6desGGxsbAECPHj0wY8YM9O/fH15eXnjw4AGWLVuGJUuWfFesTCaVRFpamtRqKiFpaGh8V/f2zyg5OQllnJzg1qkLRo/0zLW+WvXqaNGyNWZOnyxAhD9OS0MFwZGJOHovHPM6V8hR37NOcfxaoxhmHQtCaGwKBjWww9KuldBjw02kZYphb6oDkQiYfzIYbz4kw9FcBxNblYG2ugpWnH0BANhx4zUO3pFOwlZ0q4zAsPgCuUZF8f17D7KyMiXPnz0NxvDfB6Bp85ZS7XZt31qob61WFD4XXxPyNBBX/f6BtV1JSZmRqQWmbzgk1e6q3z84d3gnylWrk+Mcu1fNg7VdScRGR+V3uAUiOTkZZZzKomOnLhgzcliuberVb4AZs+dKnmuoK8fvMkUR6jN/8+ZNNGny6Y+Vj0Pkffr0wfTp0/HPP/8AAKpWrSp13NmzZ9G4cWMAwPbt2+Hp6YlmzZpBRUUFXbp0wfLlyyVtDQ0NcerUKQwdOhQ1atSAmZkZpk6d+l3bAgECD3M3btwYw4cPx/jx42FiYgIrKytMnz5dUh8SEoKOHTtCT08PBgYG6Nq1q9TY/vTp01G1alVs27YN9vb2MDQ0RLdu3RAf//VfZKmpqfDy8kKJEiWgqamJUqVKYePGjRCLxShVqhQWLlwo1f7OnTsQiURSfyGEhYWhdevW0NbWhqOjI/bt2yd1zOvXr9G1a1cYGRnBxMQEHTt2xMuXLyX1Hh4ecHNzw5w5c2BjYwMnJydJXXx8PLp37w5dXV0UK1ZMasPSly9fQiQS4c6dO5KymJgYiEQinDt37qvX/fF4FRUV3Lx5U6p86dKlsLOzQ1ZWlsxh8pMnT6JcuXLQ09NDq1atEBYWJjk+IyMDw4cPh5GREUxNTeHl5YU+ffrAzc1NbkxCqN+gETyHj0JT1+a51rfr4IbBv3uijrNzAUemONeef8C6iy9x/oveyI9+q1kMm6+G4OLT93gWlYiZR4NgpqeJhmXMso9/8QFzjj/BjZcfEBqbgktPo7Hjxhs0+n89ACSnZyE6MV3yMNHRgKOZLo7cCy+Qa1QUYxMTmJqZSx6XL55H8RIlUL1GLUmbJ0GB2LFtMyZPny1gpPmrKHwuZElNTsL2pTPRdch46Oh96k1UUVWFgbGp1OPBjYuoUq8pNLV1pM5x+cRBJCcloEnHbgUdfr6p36Ahhg4fKfN7AsjugDAzM5c8DArxqFZBaty4McRicY7H5s2bYW9vn2udWCyWJJJAdi/ljh07EB8fj9jYWGzatAl6enpSr1O5cmVcvHgRKSkpePPmDby8vL47VsHnTG7ZsgW6urq4fv06fHx8MHPmTPj5+SErKwsdO3ZEdHQ0zp8/Dz8/Pzx//hy//fab1PHPnj3DoUOHcPToURw9ehTnz5/HvHnzvvqavXv3xs6dO7F8+XIEBgbir7/+gp6eHkQiEfr16wdfX1+p9r6+vmjYsCFKlSolKZsyZQq6dOmCu3fvwt3dHd26dUNgYCCA7HkMLVu2hL6+Pi5evIjLly9LErC0tDTJOc6cOYOgoCDJzvQfLViwAFWqVMF///2HCRMmYMSIETk2J80re3t7uLq65nqNHh4eUFHJ/VsiKSkJCxcuxLZt23DhwgWEhIRg7Nixkvr58+dj+/bt8PX1xeXLlxEXF5dv80rpx9kYasFMTxMBLz/tI5aYlolHoXGoaGMg8zhdTTXEJWfIrO9QxQqv3ifh7ps4hcZbkNLT03Di+BG069hZ0iORkpyMqRPHYdyEyTA1Mxc4QsoP+zcsQbkazihTpeZX271+FoS3L4JRp1lbqfLw1y9wau9m9Bg2GSKR4L9aC9TNgBto2rAe3Nq1wpyZ0xET8+37E/4MfpZ9JoUk+DB35cqVMW3aNABA6dKlsXLlSpw5cwYAcP/+fbx48QIlSpQAAGzduhUVKlRAQEAAatXK7jHIysrC5s2boa+f/Zdkr169cObMGcyZMyfX13vy5An27NkDPz8/uLpmz/twdHSU1Ht4eGDq1Km4ceMGateujfT0dOzYsSNHb+Wvv/6KAQMGAABmzZoFPz8/rFixAqtXr8bu3buRlZWFDRs2SL6BfH19YWRkhHPnzqFFixYAAF1dXWzYsCHH8LaLiwsmTJgAAChTpgwuX76MJUuWoHlz2X8Zfo8BAwZgyJAhWLx4MTQ1NXH79m3cv38fhw8flnlMeno61q5di5Ils4d/PD09MXPmTEn9ihUrMHHiRHTq1AlA9k78x48fV0i8pHimetnfc9GJ6VLl0UnpMNVVz/WY4kZa+LWGDVacfZ5rvYaqCC3LW2DrtdeKDbaAnT97Bgnx8WjbvpOkbOmieahUpRoaNmkmYGSUX/67dBpvnj/BqPnybyF3/cxRWBa3g0PZSpKyjPQ0bFsyA+17/wFjc0u8j8g5/7awqufSAE1dW6BYsWJ48/o1VixbAs8hg7Bl+y6oqqoKHZ5iFO48UCEE//OpcuXKUs+tra0RGRmJwMBAlChRQpJIAkD58uVhZGQk6QEEsnvaPiaSnx8PZM8V0NPTkzwuXryIO3fuQFVVFY0aNco1HhsbG7Rt2xabNm0CABw5cgSpqan49ddfpdo5fzHM4+zsLInr7t27ePr0KfT19SWvbWJigpSUFDx79kxyTKVKlXKdJ/m1cyuCm5sbVFVVcfDgQQDZw9hNmjSBvb29zGN0dHQkiSQg/T7HxsYiIiICtWvXltSrqqqiRo0aX40jNTUVcXFxUo8vN3Ql5WCup4ElXSvB/3EU/rmb+xB2ozJm0NFQxfEHEbnW/yyOHDqAui4NYP7/zX4vnPPHzRvXMWrcBIEjo/zw4V0EDm5ajp4jpkBd4+sra9NSU3H74mnUadZOqvzY33/BsrgdajZqKePIwqtVm7Zo3KQpSpdxQpNmrli+ai0ePriPmwE3hA6NCpDgPZPq6tK9ICKRCFlZWQo5vkOHDpLl7wBQrFgxnD59Wu45BwwYgF69emHJkiXw9fXFb7/9Bh0dHbnHfZSQkIAaNWpg+/btOerMzT8Nkenq6n7zOT/6OAwtFoslZZ8v6f8WGhoa6N27N3x9fdG5c2fs2LEDy5Yt++oxub3Pn8eQF97e3pgxY4ZU2aTJ0zB56vQfOi/J9z4he7qFia463id+mnphoqOOJ5GJUm3N9DSwsntl3H8bh3kngmWes0NlK1x+Fo0PSd/3/ahMwkLfIuD6Vcxb+OnzcCvgOt6+eY3mDetKtZ04diSqVKuBNRu2FHSYpEBvngUhIfYDFo8bICnLysrE80d3cfnfA/DZdQYq/+9hu3f1LNLTUnIkjcEPbiMs5DnG/toYACBG9s/GKR7t4dqlF1p1618wF6MEipcoASNjY7wOeYU6dQvH3NrCPkStCIInk7KUK1cOr1+/xuvXryW9k48ePUJMTAzKly//TefQ19eX6rUEsnsDs7KycP78eckw95fatGkDXV1drFmzBidOnMCFCxdytLl27Rp69+4t9bxatWoAgOrVq2P37t2wsLCQ2kD0W127di3H83Llsrff+JiMhoWFSV7v88U432rAgAGoWLEiVq9ejYyMDHTu3Pm7z/GRoaEhLC0tERAQgIYNGwIAMjMzcfv27RyrzD6X2wauWSo/flspki80NgXvElJR084Iwf9PHnU0VFHexgAH7nxaWGX+/0TycXgCZh8Pgqw/H6wNtVDdzgjj9z8sgOjzz9F/DsLYxAT1GnwauejddwA6dPpFqp37rx0xYowXGjRq8uUp6CdTunJNjFsi/QfBrpXesChmi6ad3CWJJABc9z+GCjVdoGcovf+ex7jZSE/7NKry+mkgdq2aB8/ZK2FqVSx/L0DJRISHIzYmBmbmFvIb/ySYTMqntMmkq6srKlWqBHd3dyxduhQZGRn4448/0KhRI6mbln8ve3t79OnTB/369cPy5ctRpUoVvHr1CpGRkejaNXsvMVVVVXh4eGDixIkoXbp0jmFnANi7dy9q1qyJ+vXrY/v27bhx4wY2btwIAHB3d8eCBQvQsWNHzJw5E8WLF8erV69w4MABjB8/HsWLF/9qjJcvX4aPjw/c3Nzg5+eHvXv34tixYwAAbW1t1K1bF/PmzYODgwMiIyMxefL3b9FRrlw51K1bF15eXujXrx+0tbW/+xyfGzZsGLy9vVGqVCmULVsWK1aswIcPH776IcztnqTJBdSplZSUiJCQEMnzt2/f4PHjQBgaGsLa2gaxsTEICwtD1P+H8l+9yN4Kx8zMDGY/yQIMbXUVFDf+9O9qY6iF0ha6iEvOQER8KnbffAuPerZ4/SEZYTEpGNjAHu8SUnHhyTsA2Ynkqu5VEB6XgpVnn8NI51Pv9JdzLdtXtsT7hDRcfR5dMBeXD7KysnDs8EG0aecGNbVPPxo/rvD+kpW1NWyKff2z/LMpCp+LL2lp68Da1lGqTENLCzr6hlLlUWFv8PzRXQz4c0GOc5h9kTAmxsUCACyL2/30+0wmJSXi9RffE0GPA2Hw/9sB/rV6FZo1bwEzMzO8fv0ayxYvQAlbW9RzqS9g1IrFXFI+pU0mRSIRDh8+jGHDhqFhw4ZQUVFBq1atsGLFih8+95o1azBp0iT88ccfeP/+PWxtbTFp0iSpNv3798fcuXPRt2/fXM8xY8YM7Nq1C3/88Qesra2xc+dOSY+pjo4OLly4AC8vL3Tu3Bnx8fEoVqwYmjVr9k09lWPGjMHNmzcxY8YMGBgYYPHixWjZ8tOwyqZNm9C/f3/UqFEDTk5O8PHxkSzq+R79+/fHlStX0K9fv+8+9kteXl4IDw9H7969oaqqikGDBqFly5ZKOwH74YMHGNjvU8/yIp/s+6O279gJs+bMw7mz/pg2eaKk3mvcKADA4N898fvQ3PdaUzZlrfSxukcVyfMRzbLnvB67H47Zx5/g7+tvoK2uigkty0BPSw333sRi1J4HSMvM7n+sZW+MEibaKGGijX+GSg/xOs//1FsvAtCmohWO3Y9A1o/NfBBUwPWrCA8PQ3u3vPfS/+yKwucir274H4OhqTmcqtSS37gQefTgAQb26yN5vsgne7eU9h3dMGnKdAQ/CcKRfw4hPi4e5hbmcK7ngj88RyjNvslUMETiH534VkhdvHgRzZo1w+vXr2FpaSl0OPli1qxZ2Lt3L+7du6fwc2dlZaFcuXLo2rUrZs2a9c3HFVTPpLJrujjn1Iqi6vgwF6FDUApa6sr5h1lB8w+KlN+oCGji9HP2BCuajnr+dxuWHndCIecJXtBKIedRRkrbMymU1NRUREVFYfr06fj1118LZSKZkJCAly9fYuXKlZg9WzEbML969QqnTp1Co0aNkJqaipUrV+LFixfo0aOHQs5PREQkBA5zyyf41kDKZufOnbCzs0NMTAx8fHyEDidfeHp6okaNGmjcuLFChriB7FXmmzdvRq1ateDi4oL79+/j9OnTkoVDREREVDhxmJuUCoe5s3GY+xMOc2fjMHc2DnNn4zB3toIY5nbyOqmQ8wTNL7z7kHKYm4iIiEgGDnPLx2FuIiIiIsoz9kwSERERyaCiwq5JeZhMEhEREcnAYW75OMxNRERERHnGnkkiIiIiGXhvbvmYTBIRERHJwFxSPiaTRERERDKwZ1I+zpkkIiIiojxjzyQRERGRDOyZlI/JJBEREZEMzCXl4zA3EREREeUZeyaJiIiIZOAwt3xMJomIiIhkYC4pH4e5iYiIiCjP2DNJREREJAOHueVjMklEREQkA3NJ+TjMTURERER5xp5JIiIiIhk4zC0fk0kiIiIiGZhLysdkkoiIiEgG9kzKxzmTRERERJRn7JkkpcI/ALMd/N1Z6BCURrkRB4UOQSm8XPOL0CEohSrFjIQOQSmo8IdlgeFbLR+TSSIiIiIZOMwtH4e5iYiIiCjP2DNJREREJAM7JuVjzyQRERGRDCKRSCGP73XhwgW0b98eNjY2EIlEOHTokFS9WCzG1KlTYW1tDW1tbbi6uiI4OFiqTXR0NNzd3WFgYAAjIyP0798fCQkJUm3u3buHBg0aQEtLCyVKlICPj893x8pkkoiIiEjJJCYmokqVKli1alWu9T4+Pli+fDnWrl2L69evQ1dXFy1btkRKSoqkjbu7Ox4+fAg/Pz8cPXoUFy5cwKBBgyT1cXFxaNGiBezs7HDr1i0sWLAA06dPx7p1674rVg5zExEREckg1DB369at0bp161zrxGIxli5dismTJ6Njx44AgK1bt8LS0hKHDh1Ct27dEBgYiBMnTiAgIAA1a9YEAKxYsQJt2rTBwoULYWNjg+3btyMtLQ2bNm2ChoYGKlSogDt37mDx4sVSSac87JkkIiIikkFRw9ypqamIi4uTeqSmpuYpphcvXiA8PByurq6SMkNDQ9SpUwdXr14FAFy9ehVGRkaSRBIAXF1doaKiguvXr0vaNGzYEBoaGpI2LVu2RFBQED58+PDN8TCZJCIiIspn3t7eMDQ0lHp4e3vn6Vzh4eEAAEtLS6lyS0tLSV14eDgsLCyk6tXU1GBiYiLVJrdzfP4a34LD3EREREQyKGqfyYkTJ2L06NFSZZqamgo5t9CYTBIRERHJoKg5k5qamgpLHq2srAAAERERsLa2lpRHRESgatWqkjaRkZFSx2VkZCA6OlpyvJWVFSIiIqTafHz+sc234DA3ERERkQxCbQ30NQ4ODrCyssKZM2ckZXFxcbh+/TqcnbNvx+vs7IyYmBjcunVL0sbf3x9ZWVmoU6eOpM2FCxeQnp4uaePn5wcnJycYGxt/czxMJomIiIiUTEJCAu7cuYM7d+4AyF50c+fOHYSEhEAkEmHkyJGYPXs2/vnnH9y/fx+9e/eGjY0N3NzcAADlypVDq1atMHDgQNy4cQOXL1+Gp6cnunXrBhsbGwBAjx49oKGhgf79++Phw4fYvXs3li1blmM4Xh4OcxMRERHJINTWQDdv3kSTJk0kzz8meH369MHmzZsxfvx4JCYmYtCgQYiJiUH9+vVx4sQJaGlpSY7Zvn07PD090axZM6ioqKBLly5Yvny5pN7Q0BCnTp3C0KFDUaNGDZiZmWHq1KnftS0QAIjEYrH4B6+XSGFSMoSOQDnEJKXLb1REVB1zWOgQlMLLNb8IHYJSeBefJnQISsFMX0N+oyJAqwC6xJouv6qQ8/gPd1bIeZQRh7mJiIiIKM84zE1EREQkg1DD3D8TJpNEREREMqgwm5SLw9xERERElGfsmSQiIiKSgR2T8jGZJCIiIpJB0RuOF0ZMJomIiIhkUGEuKRfnTBIRERFRnrFnkoiIiEgGDnPLx2SSiIiISAbmkvIxmSQCsHH9XzjjdwovXjyHppYWqlathpGjx8LewVHo0BTq7u2b2LnNF08eP8L7d1GYvWAZGjRuBgDIyEjHhjUrcO3yRYS9fQNdPT3UqF0Xgz1HwczcIse50tLS8LtHdzwNDsKGv/ehtFPZgr6cb1a3tBn+aFkGle2MYWWkDY9VV3DiTigAQE1VhAluFdGsohXszHURl5yOi4GRmL3/PiJiUyTn2DK0HiqUMIKZgSZiE9Nw4Ys2Y9uXx9gO5XO8dlJqBhw9DxXIdeaHiIgILF28AJcvXkRKSjJK2Nph5uy5qFCxktChKcy9/25i99+bERyU/bmYMX8p6jdqJqmfP/NPnDr+j9Qxteq6YN7StVJl1y5fwLaNa/H82RNoaGigcrWamOWzHIVNUfieoO/DZJIIwM2AG/ituzsqVKqEzIxMrFi2GEMG9seBf45BR0dH6PAUJjk5GaXKOKFNh06YMn6kVF1KSgqePH6E3v0Ho1RpJ8THx2HFonmYNMYT67buyXGutcsXwdTcAk+Dgwoo+rzT0VTDwzex2Hn5JXz/qCdVp62hikq2RlhyLBAPX8fAUFcDs3+riq2e9dByjr+k3eWgKCz79zEiY1JgZayNab9UxoYhzmg//ywAYPWpIGw5/0zq3PvGNMSdlx/y/wLzSVxsLDx6dkfN2nWwau16GJsYI+TVKxgYGAodmkIlJyejZOkyaN2+E6ZNGJlrm1p1XTB+ymzJc3V1dan6C/5+WDxvOvoPGYGqNWsjMzMTL58F52fYgigq3xOfE4Fdk/IwmSQCsGbdRqnnM+fMQ5MGzgh89BA1atYSKCrFq+vSAHVdGuRap6enj8WrNkiVjRg3CUM8uiMiPAyWVtaS8muXLyLg+hXMmr8U169czNeYFcH/QTj8H4TnWhefnIHflkhfw6Sd/+HEn81QzEQbb6OTAQDrTn9KDN5EJ2HFicfY/Ec9qKmKkJEpRlJqJpJSMyVtyhc3hJONIcb//V8+XFHB2LRxPSytrDBrjrekrHjxEgJGlD/q1GuAOvVy/1x8pK6hARNTs1zrMjMysGrJPAzyHIM2HTpLyu0dSio0TmVQVL4nPsfV3PJxNTdRLhLi4wEABoaF96/tb5GYkACRSAQ9PX1JWfT7d1g4dzr+nOENTS0tAaPLP/ra6sjKEiM2KT3XeiMddXSpY4uAZ++RkSnOtY17Awc8DY/H9eB3+Rlqvjp/1h8VKlTE2FHD0biBM7p2ccP+vTl7qYuCu7dvokvrRujTtT2Wzp+F2NgYSV1wUCDeRUVCRUWEwb1/xa9tm2DCyCF4UQh7Jvk9QblhMkn0haysLPjMn4uq1aqjdOkyQocjmNTUVPy1cgmatWgDXT09AIBYLIb3jMno0LkrypavKHCE+UNTTQWTu1TCwYDXSEjJkKqb3KUSnq90w+NlHVHMRAceq67IPEfnOrbYeelFQYScb968eY09u3fC1s4ea9ZtRNffumO+92z8c+ig0KEVqFrO9TFh6hwsWLEeA4eOxN3/bmLiqN+RmZndEx0a+gYAsGXDGrh7DMKcRSuhb2CA0X/0Q1xsrJChK1xR/J4QiUQKeRRmHOYm+sLc2TPwLDgYm7ftEDoUwWRkpGP6xDEQi8UYPWGKpHz/7u1ITkqEu8cAAaPLP2qqIqwbXBciAF5/385Rv/pkEHZceoHiJjoY0748VvSrhZ4rLudo17p6MehpqmH3lVcFEHX+ycoSo0LFihg+cjQAoFy58nj6NBh79+xCB7dOAkdXcJo2by352rFUGTiWKoNeXdrg7u0AVK9VF+KsLACAu8dANGzaHAAwbvJsdOvgivP+J9G+U1dB4s4PRfF7opDngQrBnkmiz8ydPRMXzp/Det8tsLSyEjocQWRkpGPaxDGICA/FopXrJb2SAPDfzRt4eP8umrtUR9O6VeDeuQ0AYHCf3zB3+iShQlaIj4lkcVMd/LbkYo5eSQCITkjD84gEXAiMxJD11+Fa2Ro1HE1ytHOv7wC/+2F4F59aEKHnG3NzcziWlJ735+joiLCwUIEiUg42xUrA0MgYb9+EAABMzMwBAHb2n94rDQ0NWNsUR2R47nN1f1b8nqDcsGeSCP8fvp0zC/5n/LBx87ZCP6Fclo+J5NuQECxduwmGRkZS9cPHTkT/IcMkz9+/i8TYYYMxbe5ClKvw824L8jGRdLTQQ5eF5/EhMU3uMR8n5WuqqUqV25rpwMXJHH1kDIH/TKpWq46XL6SH6l+9fAkbm2ICRaQcoiLDERcbA1PT7CSyTNnyUNfQwOuQl6hUtTqA7M9SeNhbWFpbf+1UP52i+D2hwq5JuZhMEgGYO2sG/j1+FEtXrIauji7eRUUBAPT09aFViBaZJCUl4e3rEMnzsNC3CA56DANDQ5iamWGq12g8efwI85asQmZmFt6/y148YmBoCHV1dakV3QCg/f9tk2yKlYCFpfL25OpoqsLB4lMPq62ZLiqUMERMYhoiYlOwYYgzKtkaodeKy1BREcHcQBMAEJOYhvRMMao5mKCavTGuP32H2MR02FnowqtjBbyITMDN5++lXqubiwMiYlNw5n5YgV5jfujZuw/69OyODevWokXL1nhw/x727duDqdNnCh2aQiUnJUl6GQEgPPQtnj55DH0DQxgYGGLrxjVo0MQVJiZmCH37GutWLoZNcVvUrOsCANDV1UP7Tl2xZf0qWFhawdLKGrv/3gwAaNS0hRCXlG+KyvfE55hLyicSi8W5L0UkEkAuI4sFokoFp1zLZ872RsdOnXOty08xMlYR/6j/bt3AyCH9cpS3atsRHoP+QLeOLXM9bunaTahWo3aO8rDQt+jWsWW+blpedczhHz5HvTLmODCuUY7y3VdeYuE/jxAwr02ux3VecB5XnkShbDEDzO5WFeWLG0JHUw2RsSk4+yAcS44FIjzm08bmIhFwc14b7L36CvMOPfzhuD/3cs0vCj3ftzp/7iyWL12MkFcvUax4cfTq3RddfhVuDuC7ePm9xt/rzq0AjBma83PRok0HjBw/BVO9RuDpk8dIiI+DqZkFatZxhscgT6mtgjIy0rFh9TL4/XsEaampKFuhEoaO8oK9YymFxwsAZvoa+XLeb6FM3xNaBdAl9otvzvnTebGvb3WFnEcZMZkkpSJUMqls8iuZ/BkpIpksDIRKJpVNfiSTPyMhk0llwmRSOXCYm4iIiEgGDnPLx2SSiIiISAYuwJGPWwMRERERUZ6xZ5KIiIhIBvZLysdkkoiIiEiGwn4rREXgMDcRERER5Rl7JomIiIhkUGHHpFxMJomIiIhk4DC3fBzmJiIiIqI8Y88kERERkQzsmJSPySQRERGRDBzmlo/JJBEREZEMXIAjH+dMEhEREVGe5SmZvHjxInr27AlnZ2e8ffsWALBt2zZcunRJocERERERCUkkEinkUZh9dzK5f/9+tGzZEtra2vjvv/+QmpoKAIiNjcXcuXMVHiARERGRUEQKehRm351Mzp49G2vXrsX69euhrq4uKXdxccHt27cVGhwRERERKbfvTiaDgoLQsGHDHOWGhoaIiYlRRExERERESkFFJFLI43tkZmZiypQpcHBwgLa2NkqWLIlZs2ZBLBZL2ojFYkydOhXW1tbQ1taGq6srgoODpc4THR0Nd3d3GBgYwMjICP3790dCQoJC3pfPfXcyaWVlhadPn+Yov3TpEhwdHRUSFBEREZEyEIkU8/ge8+fPx5o1a7By5UoEBgZi/vz58PHxwYoVKyRtfHx8sHz5cqxduxbXr1+Hrq4uWrZsiZSUFEkbd3d3PHz4EH5+fjh69CguXLiAQYMGKeqtkfjurYEGDhyIESNGYNOmTRCJRAgNDcXVq1cxduxYTJkyReEBEhERERUlV65cQceOHdG2bVsAgL29PXbu3IkbN24AyO6VXLp0KSZPnoyOHTsCALZu3QpLS0scOnQI3bp1Q2BgIE6cOIGAgADUrFkTALBixQq0adMGCxcuhI2NjcLi/e6eyQkTJqBHjx5o1qwZEhIS0LBhQwwYMACDBw/GsGHDFBYYERERkdAUtZo7NTUVcXFxUo+Pi5i/VK9ePZw5cwZPnjwBANy9exeXLl1C69atAQAvXrxAeHg4XF1dJccYGhqiTp06uHr1KgDg6tWrMDIykiSSAODq6goVFRVcv35doe/RdyeTIpEIf/75J6Kjo/HgwQNcu3YNUVFRmDVrlkIDIyIiIhKaooa5vb29YWhoKPXw9vbO9TUnTJiAbt26oWzZslBXV0e1atUwcuRIuLu7AwDCw8MBAJaWllLHWVpaSurCw8NhYWEhVa+mpgYTExNJG0XJ8x1wNDQ0UL58eUXGQkRERFQoTZw4EaNHj5Yq09TUzLXtnj17sH37duzYsQMVKlTAnTt3MHLkSNjY2KBPnz4FEe53+e5kskmTJl/dfNPf3/+HAiIiIiJSFt+7ElsWTU1Nmcnjl8aNGyfpnQSASpUq4dWrV/D29kafPn1gZWUFAIiIiIC1tbXkuIiICFStWhVA9oLpyMhIqfNmZGQgOjpacryifPcwd9WqVVGlShXJo3z58khLS8Pt27dRqVIlhQZHREREJCQhVnMnJSVBRUU6RVNVVUVWVhYAwMHBAVZWVjhz5oykPi4uDtevX4ezszMAwNnZGTExMbh165akjb+/P7KyslCnTp08vhu5++6eySVLluRaPn369HzZu4iIiIhIKELcCrF9+/aYM2cObG1tUaFCBfz3339YvHgx+vXrJ4lp5MiRmD17NkqXLg0HBwdMmTIFNjY2cHNzAwCUK1cOrVq1wsCBA7F27Vqkp6fD09MT3bp1U+hKbuAH5kx+qWfPnqhduzYWLlyoqFMSERERFTkrVqzAlClT8McffyAyMhI2NjYYPHgwpk6dKmkzfvx4JCYmYtCgQYiJiUH9+vVx4sQJaGlpSdps374dnp6eaNasGVRUVNClSxcsX75c4fGKxJ9vp/4Dtm3bBi8vL4SGhiridFREpWQIHYFyyMxSyMeyUFBVKex3tf02xrWHCx2CUnh/fZnQISgFRc3j+9lpKaxLTLZhBwMVcp4Vncop5DzK6Lv/GTp37iz1XCwWIywsDDdv3uSm5URERFSoCDHM/bP57mTS0NBQ6rmKigqcnJwwc+ZMtGjRQmGBEREREZHy+65kMjMzE3379kWlSpVgbGycXzERERERKQXOtJHvu7YGUlVVRYsWLRATE5NP4RAREREpDxWRYh6F2XfvM1mxYkU8f/48P2IhIiIiop/MdyeTs2fPxtixY3H06FGEhYXluGk5ERERUWEhEokU8ijMvnnO5MyZMzFmzBi0adMGANChQwepN0csFkMkEiEzM1PxURIREREJoLAPUSvCNyeTM2bMwJAhQ3D27Nn8jIeIiIiIfiLfnEx+3Nu8UaNG+RYMERERkTIp5CPUCvFdWwMV9jF/IiIios/xbkPyfVcyWaZMGbkJZXR09A8FRERERKQsvnulchH0XcnkjBkzctwBh4iIiIiKru9KJrt16wYLC4v8ioWIiIhIqXCUW75vTiY5X5KIiIiKGs6ZlO+bpwJ8XM1NRERERPTRN/dMZmVl5WccREREREqHHZPyfdecSSIiIqKihHfAkY8r3omIiIgoz9gzSURERCQDF+DIx2SSiIiISAbmkvJxmJuIiIiI8ow9k0REREQycAGOfEwmiYiIiGQQgdmkPEwmiYiIiGRgz6R8TCaJAOzZtQN7du9E6Nu3AICSpUpj8O9/oH6DRgJHlr/27t6Jvbt3Iiw0+7odS5bCoCFD4dKgIQAgNTUVixfMx6kTx5CWlg5nFxdM/HMaTM3MhAw7361ZtQJrV6+UKrN3cMDhoycEikgxXKqXxKjezVC9XAlYmxui6+j1OHLuvqR+3XR39OpQR+qYU1cC0dFzTY5zaair4cLW0ajiVBx1us3HvSfZ30OaGmpYMek3VCtXAmUdLPHvxYfoOmZD/l5YPrh1MwBbfTfi0aOHeBcVhcXLVqJJM1dJfVJSIpYvWYSz/mcQGxMDm2LF0d29F379rZuAUReMiIgILF28AJcvXkRKSjJK2Nph5uy5qFCxktChkUCYTBIBsLC0wohRY2FrZwexWIwjhw9hhOdQ7N5/EKVKlRY6vHxjYWmJ4SPHfLrufw5h1PCh2Ln3AEqWKo1FPt64dOE85i9aBj09PcyfOwtjRw2D77adQoee70qWKo11G3wlz1XVVAWMRjF0tTRw/8lbbD18DbsXDci1zcnLjzB4+nbJ89S0jFzbzR3RAWFRsajiVFyqXFVFBcmp6Vi96zzcmlVVWOwFLTk5GWWcyqJjpy4YM3JYjvpFPvMQcP065nj7wKZYMVy9chnes2fC3MICjZs0FSDighEXGwuPnt1Rs3YdrFq7HsYmxgh59QoGBoZCh5Zv2DMpH5NJIiDHD/9hI0Zhz66duHf3TqFOJhs1lr5uz+GjsG/3Lty/dxcWllY4dGA/5s5fgNp16gIAps/yRpeObXDv7h1UrlJVgIgLjpqqKszMzYUOQ6FOXQnEqSuBX22TlpaBiPfxX23Tol45NHMui+5jN6FV/QpSdUkpaRjhvQcA4FzFEUb62j8WtEDqN2iI+v/voc/N3Tt30K6jG2rWzu7J7fLrb9i/dzce3r9XqJPJTRvXw9LKCrPmeEvKihcvIWBE+U/EvYHk4tZARF/IzMzEv8ePITk5CVWqVBM6nAKTmZmJk/9mX3flKlUR+OghMjLSUaduPUkbB0dHWFnb4N7dO8IFWkBehbyCa+P6aNOyGSaOH4Ow0FChQyoQDWqWwqvTc3D3wJ9YNrErTAx1pOotTPSxekp39J+8DUkpaQJFKbwqVavi/Fl/REZEQCwWI+DGNbx6+RJ167kIHVq+On/WHxUqVMTYUcPRuIEzunZxw/69e4QOiwTGnkmi/wt+EoRePbohLS0VOjo6WLJ8FUqWKiV0WPku+EkQPHp2R1paKrR1dLBo6Uo4liyFoMeBUFdXh76BgVR7U1NTvH/3TqBoC0alypUxa4437O0dEBUVhb/WrELf3u7Yf/gIdHX1hA4v3/hdCcRh/7t4GfoejsXNMMOzPQ6v+B2NPBYjK0sMAFg3wx3r913C7cDXsLU2EThi4XhNmoJZ06egZbNGUFNTg0gkwpTps1CjZi2hQ8tXb968xp7dO9GrT1/0HzQED+/fx3zv2VBXV0cHt05Ch5cvOMwtH5NJov+zt3fAnv2HkJAQD79TJzFlkhc2bv670CeU9g4O2LnvIBLi43HG7ySmTp6ADb7bhA5LUJ8vvCrjVBaVKldB6+ZNcPLEv+jc5VcBI8tfe0/dlnz98GkY7geHIvDINDSsWRrnbjzBH90aQl9HEwt8/QSMUjns2r4N9+/dxdKVq2FtXQy3bwVg3pzsOZN1nevJP8FPKitLjAoVK2L4yNEAgHLlyuPp02Ds3bOr0CaTHOWWj8kk0f+pa2jA1s4OAFC+QkU8fHAf2//eiqnTZwocWf5SV9eAre3n1/0AO/7eihat2iA9PR3xcXFSvZPv378v9Ku5v2RgYAA7O3u8DgkROpQC9fLte0R9SEDJEmY4d+MJGtcqgzqVHRB7bbFUu8t/j8Wuf29i4LTtMs5UuKSkpGDFsqVYvGwFGjRqDAAo4+SEoMePsW3zpkKdTJqbm8OxZEmpMkdHR5z2OylQRKQMmEwSyZCVlYX0tKI3JyxLnH3d5cpXgJqaOm5cv4pmzVsCAF6+eI7wsNBCv/jmS0mJiXj9+jXadihcC3LkKWZhBFNDHYRHxQEAxizYj+mrj0nqrc0NcXT1H+g1YTMCHrwSKswCl5GRgYyMdIhUpJcdqKqqICsrS6CoCkbVatXx8sULqbJXL1/CxqaYQBHlPxV2TcrFZJIIwLIli1C/QUNYWVsjKTERx48dxc2AG1izbqPQoeWrFUsXoV79hrC2tkZiYiJOHD+KWwE3sGrtBujr68OtcxcsWjAfBoaG0NXVg4/3bFSuUrXQJ5OLFsxHo8ZNYG1jg6jISKxZtQKqqipo3aad0KH9EF1tDZQs8Skhti9mispliuFDXBKiYxPx5+DWOHTmLsLfxcGxhBnmjOiIZ6/fwe/qYwDA6/APUudLSEoFADx/8w5vI2Mk5WUdrKChrgpjQx3o62ihcpnsROPjXpQ/g6SkRKme6Ldv3yDocSAMDA1hbW2DGjVrYemiBdDS1IS1TTHcunkDR/85jNHjJggYdf7r2bsP+vTsjg3r1qJFy9Z4cP8e9u3bU6hHcDhnUj6RWCwWCx0E0UcpuW9pl++mTZmEG9euISoqEnr6+ihTxgl9+w+Es0ArMzOzCuZjOWPqn7hx/SreRUVBT18fpUs7waPfAMmK1I+blp/89xjS0tPgXK8+Jk6eCjOzguuhUxXgJ/n4saNw+2YAYmJiYGxigmrVa2DY8FEoYWtb4LF8ZFx7+A+fo0GNUji1Pud5tv1zHcO992DP4gGo4lQcRvraCIuKxelrjzFz9XFERue+VZCttQmCjk2X2rQcAB4fnQY7G9Mc7bWr//g1vL++7IfP8S1u3riOgf365Chv39ENM+fMw7t3UVixdDGuXrmMuNhYWNvYoPMvXdGzt0eBbCUjZG/Z+XNnsXzpYoS8eolixYujV+++6PJrV0Fi0SqALrHll17Ib/QNhtd3UMh5lBGTSVIqQiWTyqagksmfgRDJpDJSRDJZGBRUMqnsOPSarSCSyRWXFZNMDnMpvMkkh7mJiIiIZFABE3d5mEwSERERycBOYPl4BxwiIiIiJfP27Vv07NkTpqam0NbWRqVKlXDz5k1JvVgsxtSpU2FtbQ1tbW24uroiODhY6hzR0dFwd3eHgYEBjIyM0L9/fyQkJCg8ViaTRERERDKoiBTz+B4fPnyAi4sL1NXV8e+//+LRo0dYtGgRjI2NJW18fHywfPlyrF27FtevX4euri5atmyJlJQUSRt3d3c8fPgQfn5+OHr0KC5cuIBBgwYp6q2R4AIcUipcgJONC3A+4QKcbFyAk40LcLJxAU62gliAs+6aYvZQHVTX7pvbTpgwAZcvX8bFixdzrReLxbCxscGYMWMwduxYAEBsbCwsLS2xefNmdOvWDYGBgShfvjwCAgJQs2ZNAMCJEyfQpk0bvHnzBjY2Nj9+Uf/HnkkiIiKifJaamoq4uDipR2pqaq5t//nnH9SsWRO//vorLCwsUK1aNaxfv15S/+LFC4SHh8PV1VVSZmhoiDp16uDq1asAgKtXr8LIyEiSSAKAq6srVFRUcP36dYVeG5NJIiIiIhlEIsU8vL29YWhoKPXw9vbO9TWfP3+ONWvWoHTp0jh58iR+//13DB8+HFu2bAEAhIeHAwAsLS2ljrO0tJTUhYeHw8LCQqpeTU0NJiYmkjaKwtXcRERERDIoakrBxIkTMXr0aKkyTU3NXNtmZWWhZs2amDt3LgCgWrVqePDgAdauXYs+fXJupi809kwSERER5TNNTU0YGBhIPWQlk9bW1ihfvrxUWbly5RDy/1t8WllZAQAiIiKk2kREREjqrKysEBkZKVWfkZGB6OhoSRtFYTJJREREJIOihrm/h4uLC4KCgqTKnjx5Aju77EU8Dg4OsLKywpkzZyT1cXFxuH79OpydnQEAzs7OiImJwa1btyRt/P39kZWVhTp16uTx3cgdh7mJiIiIZBCi123UqFGoV68e5s6di65du+LGjRtYt24d1q1bBwAQiUQYOXIkZs+ejdKlS8PBwQFTpkyBjY0N3NzcAGT3ZLZq1QoDBw7E2rVrkZ6eDk9PT3Tr1k2hK7kBJpNERERESqVWrVo4ePAgJk6ciJkzZ8LBwQFLly6Fu7u7pM348eORmJiIQYMGISYmBvXr18eJEyegpaUlabN9+3Z4enqiWbNmUFFRQZcuXbB8+XKFx8t9JkmpcJ/JbNxn8hPuM5mN+0xm4z6T2bjPZLaC2Gdyy83XCjlPn5olFHIeZcSeSSIiIiIZmLbLx2SSiIiISAb2AsvH1dxERERElGfsmSQiIiKSgf2S8jGZJCIiIpKBo9zycZibiIiIiPKMPZNEREREMojYNSkXk0kiIiIiGTiEKx/fIyIiIiLKM/ZMEhEREcnAYW75mEwSERERycBUUj4OcxMRERFRnrFnkoiIiEgGDnPLx2SSlEpqepbQISiF44/DhA5BabRyshI6BKUQfX250CEohV5/3xY6BKWwqXtVoUNQClpq+T/AyiFc+ZhMEhEREcnAnkn5mHATERERUZ6xZ5KIiIhIBvZLysdkkoiIiEgGjnLLx2FuIiIiIsoz9kwSERERyaDCgW65mEwSERERycBhbvk4zE1EREREecaeSSIiIiIZRBzmlovJJBEREZEMHOaWj8PcRERERJRn7JkkIiIikoGrueVjMklEREQkA4e55WMySURERCQDk0n5OGeSiIiIiPKMPZNEREREMnBrIPmYTBIRERHJoMJcUi4OcxMRERFRnrFnkoiIiEgGDnPLx2SSiIiISAau5paPw9xERERElGfsmSQiIiKSgcPc8rFnkoiIiEgGFZFiHj9i3rx5EIlEGDlypKQsJSUFQ4cOhampKfT09NClSxdERERIHRcSEoK2bdtCR0cHFhYWGDduHDIyMn4smFwwmSQiIiJSUgEBAfjrr79QuXJlqfJRo0bhyJEj2Lt3L86fP4/Q0FB07txZUp+ZmYm2bdsiLS0NV65cwZYtW7B582ZMnTpV4TFymJuKpHVrVmLDX6ukyuzsHbD30HHJ83t3/8Oalcvw8P49qKqqoLRTWSxfvQFaWloFHa5CnN27Gef3b5UqM7UpgWGLt0iVicVibJ83EU/v3sBvY2aiXK36Oc6VFB+LNV4DER/9Dl4b/4G2rl6+xp7f3Nq4IjwsNEd5l67dMW7iFBzavwcn/z2GoMePkJSYCL8L16CvbyBApPnr1s0AbPHdiMBHDxAVFYXFy1ahaTNXSf2aVStw8sQxhIeHQ11dHeXLV4Dn8FGoVLmKgFH/OBUR0LWqNRqUNIGRtjo+JKXj3NP32Hc3XNLGUEsNPWsWQ5Vi+tDVUMOj8HhsvP4G4XGpkjbqqiL0qVUcLg7GUFMV4e7bOKy/+hqxKYrvCSoI69asxPq1OX9O7juc/XMyNTUVSxfNh9+J40hLS0fdei7w+nMqTE3NhAg33wg5zJ2QkAB3d3esX78es2fPlpTHxsZi48aN2LFjB5o2bQoA8PX1Rbly5XDt2jXUrVsXp06dwqNHj3D69GlYWlqiatWqmDVrFry8vDB9+nRoaGgoLE4mk1RkOZYshZV/bZI8V1P99HG4d/c/jBg6CB79BmGs159QU1PDk6DHUFH5uTvzzYvbo/fkhZLnKiqqOdpcO74P8n52Hv5rISxtHREf/U7RIQrC9+89yMrKlDx/9jQYw38fgKbNWwLIHk5yrlcfzvXqY/WKJUKFme+Sk5NQxskJbp26YPRIzxz1dvb2mDBpKooXL4GU1BRs37oZvw/qh3+O+8HExESAiBXDrZIlWpQ1x8qLL/E6JgUlTXUwtIEdktIycTwwCgAwvpkjMrPEmH/mOZLTMtGuogWmtSyFkQcDkZqRBQDwqF0c1YsbYtG550hKy0T/uiUwrqkjJh9/IuTl/RDHkqWwal3uPyeXLPDGpYsX4L1gKfT09bHAexbGjx6OjVt2CBFqvhFyNffQoUPRtm1buLq6SiWTt27dQnp6OlxdP/2xV7ZsWdja2uLq1auoW7curl69ikqVKsHS0lLSpmXLlvj999/x8OFDVKtWTWFxMpmkIktVVQ1mZua51i1dOA+/de+JPv0GSsrs7B0KKrR8o6KqCn0j2b/0w14+xZVjezFo7losGvJLrm0CTh1GSmICGnXphad3buRXqAXK+ItEaKvvBhQvUQLVa9QCAHRz7w0AuHWzcFyvLPUbNEL9Bo1k1rdp217q+ZjxE3HwwD4EPwlCnbrO+R1evnGy0ENASAxuv4kDAEQlpKG+ozFKmesCgVGwNtCEk4UeRh58hDcxKQCA9VdeY0O3SqjvYIwzwe+ho66CpqVNsez8SzwISwAArLr0Css7V0Bpcx0ERyUJdn0/QlUt95+TCfHxOHzwAGbPW4BadeoCAKbOnItf3dri/r07qFS5agFHmn8UlUumpqYiNTVVqkxTUxOampq5tt+1axdu376NgICAHHXh4eHQ0NCAkZGRVLmlpSXCw8MlbT5PJD/Wf6xTpJ+7m4XoB7wOeYU2zRvCrW1zTJk4TjLMGR39Hg/u34OxiSn69+6OVk3rY3D/Xrjz3y2BI/5x0eFvsfD3X7F0uDv2r5iDmHefJmunpaZg/4o5aNtvhMyEM/LNS5w/sA2dhk6ASFQ4f3ykp6fhxPEjaNexM0TcYE6m9PQ07N+7G3r6+ijj5CR0OD8kKDIBlaz1YW2Q/UvdzlgbZS318N+bWADZw9cAkJ6ZJTlGDCA9S4yyltlTPBzNdKCuqoJ7YfGSNqGxqYhKSIWT+c87DeT1q1do7doQHds0x+TPfk4GPnqIjIx01K7z6Y8IewdHWFlb4/7dOwJFq9y8vb1haGgo9fD29s617evXrzFixAhs3779p5haxZ5JKpIqVqqMqTPnws7eAe/eRWHD2lUY1K8ndu47grdvXgMA1q9diRGjxqNM2bI4duQwhg7qi537/oGtnb2wwedR8VLl4Pb7eJhal0BCTDTO7dsC3+kj8MeCTdDU1sHJratRokwFlK3pkuvxGelp2L98Npq7D4aRmSU+RIQV8BUUjPNnzyAhPh5t23cSOhSldOHcWXiNG42UlGSYmZtj7bpNMDb+eYe4AeDgvQhoq6tiWefyyBJnz6HceSsUF59/AAC8jUlBVEIq3GsUw19XQpCakYV2FSxgpqsBYx11AICRtjrSM7OQlJYpde6Y5AwY6fycv2orVKqMabP+/3MyKgrr/1qFgX17Ytf+I3j//h3U1dWhbyA9d9jExAzv3xWO6S8fqSjoj8qJEydi9OjRUmWyeiVv3bqFyMhIVK9eXVKWmZmJCxcuYOXKlTh58iTS0tIQExMj1TsZEREBKysrAICVlRVu3JAeTfm42vtjG0X5Ob/DiX5QvfoNJV+XLuOEihUro0ObZjh96l84OJQEAHTu8hvau2WvjHMqWx43b1zDkcMHMHT46FzPqexKV6vz6YldSRQrVQ5LPbvj4dVz0DEwxIuH/2HwvHUyjz+9cwPMitmhSoPmBRCtcI4cOoC6Lg1gbmEhdChKqVbtOti9/xBiPnzAgX17MH7sSPy9Yy9MTE2FDi3P6jkYo0FJEyw7/xKvY5Jhb6KDvrWLIzo5HeefRiNTDCzwf47fXeywxb0KMrPEuBcah9tvYgv1DoQuX/6crFQZ7Vs3w+mT/0LzJ+gtUxRF/Rt/bUj7S82aNcP9+/elyvr27YuyZcvCy8sLJUqUgLq6Os6cOYMuXboAAIKCghASEgJn5+zeYmdnZ8yZMweRkZGw+P/PMz8/PxgYGKB8+fIKuqpsTCaJAOgbGMDW1h5vXoegZu3s+T8OJUtKtbF3cER4WOHpjdPW1YOpdXFER7xFxOvniI4Ixbx+0nPi9iyeDtuyldB32hK8ePgfIkNeYMb189mV4uz/+Qx0Q8NOPdHkV4+CvYB8EBb6FgHXr2LewmVCh6K0tHV0YGtrB1tbO1SuUhXt27TAwQP70H/gYKFDy7NetYrh0L1wXH6R3RMZ8iEF5noa6FzJCuefRgMAnr9Pxrh/HkNHXQVqKiqIS82AdzsnPHuXPRcyJjkd6qoq0NFQleqdNNJWQ0zSz7ma+0v6BgawtbPH69chqFO3HtLT0xEfFyfVOxkd/Q6mZoVrNbcQ9PX1UbFiRakyXV1dmJqaSsr79++P0aNHw8TEBAYGBhg2bBicnZ1Rt27277AWLVqgfPny6NWrF3x8fBAeHo7Jkydj6NCh35zUfismk0QAkpIS8fbNa5iZdYCNTTGYm1vg1csXUm1CXr1CPZcGAkWoeKkpyYiOCEXlBs1RwbkxqjdtK1W/Zlx/tOz9B5xqZP+V+9uo6UhPT5PUhz57jMNrF6Df9GUwtrQp0Njzy9F/DsLYxAT1vrIIhaSJs7KQlpYmv6ES01RVQZZYuiwrS5zrKt6k9CwAWbAy0ISjqQ523c6eQ/j8XRLSM7NQyVof11/FAABsDDRhrqeJoKiE/L2AApKUlIi3r1/DrG0HlCtfAWpq6gi4cQ1NXVsAAF6+fIHwsDBUqlJV2EAVTUm7n5csWQIVFRV06dIFqampaNmyJVavXi2pV1VVxdGjR/H777/D2dkZurq66NOnD2bOnKnwWJhMUpG0bLEPGjRsDCvrYngXFYl1a1ZARVUFLVq1hUgkQs8+/bBu7UqULlMWZZzK4tiRQ3j18jnmLVwqdOh5dnLbGjjVqAdDM0vEf3iHc/u2QEVFBZVcmkLXwCjXRTeGZhYwtrAGAJhYFZOqS4rLXpxgVszup99nEgCysrJw7PBBtGnnBjU16R+N799F4f37d3gTEgIAeBb8BDq6urC0soahoZEA0eaPpKREhPz/GgHg7ds3ePw4EIaGhjAyNML6dWvRuElTmJmbI+bDB+zeuR2RkRFo3rKVgFH/uJuvY9GlihXeJabhdUwKHEy00a6iBc4Gv5e0cbY3QlxKBqIS0mBnoo2+tYsjICQGd0OzF9wkpWfBP/g9PGoXQ0JqBpLTs7cGCopM+GlXci9d5IMGjRrD2roYoj77OdmydVvo6eujY6fOWLJwHgwMDKGrp4cF82ajUpWqhWolN6A8t1M8d+6c1HMtLS2sWrUKq1atyv0AAHZ2djh+/LjMekVhMklFUmREOCZPHIvYmBgYG5ugSrXq2LR1l2SLmO49+yAtLQ1LFs5DXGwsSpdxwoq1G1G8hK3AkeddXPQ77FsxG8nxcdAxMIStUyUMmLUSugZGQoemFAKuX0V4eJhknuznDuzbjY1/ffqLf0j/7K2CJs+Yg3YdCs9CnYcPHmBgv96S54t8sleatu/YCZOnzsDLF88x5p+DiPnwAUZGRqhQsRI2bdmOUqVKCxWyQmy89hrdqttgoHMJGGhlb1ruF/QO++582j7FWFsdfWoXh6GWGmL+P5fy803NAWDzjTcQi4tjbFNHqKuIcDc0Huuvhnz5cj+NyIhwTJ4g/XPSd9unn5Ojxk2ESEUFXmNGIC0tTbJpORU9IrFYLJbfjKhgxCZnyW9UBBx/XHjmZv6oVk6KXXX4s9JSz7nBfFHU6+/bQoegFDZ1ryp0CErBQCv/tyi78TxWIeep7WiokPMoI/ZMEhEREcmgHIPcyq1w7jpMRERERAWCPZNEREREsrBrUi4mk0REREQyKMtqbmXGZJKIiIhIBgXdTbFQ45xJIiIiIsoz9kwSERERycCOSfmYTBIRERHJwmxSLg5zExEREVGesWeSiIiISAau5paPySQRERGRDFzNLR+HuYmIiIgoz9gzSURERCQDOyblYzJJREREJAuzSbk4zE1EREREecaeSSIiIiIZuJpbPiaTRERERDJwNbd8TCaJiIiIZGAuKR/nTBIRERFRnrFnkoiIiEgWdk3KxWSSiIiISAYuwJGPw9xERERElGfsmSQiIiKSgau55WMySURERCQDc0n5OMxNRERERHkmEovFYqGDIPooJUPoCJRDZhY/lh+pcIwJAIfaPkpJzxQ6BKVg3Wau0CEoheSzU/L9NQLDEhVynnLWugo5jzLiMDcRERGRDFzNLR+HuYmIiIgoz9gzSURERCQDp5jIx2SSiIiISAbmkvIxmSQiIiKShdmkXJwzSURERER5xp5JIiIiIhm4mls+JpNEREREMnABjnwc5iYiIiKiPGMySURERCSDSEGP7+Ht7Y1atWpBX18fFhYWcHNzQ1BQkFSblJQUDB06FKamptDT00OXLl0QEREh1SYkJARt27aFjo4OLCwsMG7cOGRkKP5Wc0wmiYiIiGQRIJs8f/48hg4dimvXrsHPzw/p6elo0aIFEhM/3dpx1KhROHLkCPbu3Yvz588jNDQUnTt3ltRnZmaibdu2SEtLw5UrV7BlyxZs3rwZU6dOzeMbIRvvzU1KhffmzsZ7c3/Ce3Nn49uQjffmzsZ7c2criHtzP4tKVsh5Sppr5/nYqKgoWFhY4Pz582jYsCFiY2Nhbm6OHTt24JdffgEAPH78GOXKlcPVq1dRt25d/Pvvv2jXrh1CQ0NhaWkJAFi7di28vLwQFRUFDQ0NhVwXwJ5JIiIiIplECvovNTUVcXFxUo/U1NRviiE2NhYAYGJiAgC4desW0tPT4erqKmlTtmxZ2Nra4urVqwCAq1evolKlSpJEEgBatmyJuLg4PHz4UFFvDwAmk0REREQyiUSKeXh7e8PQ0FDq4e3tLff1s7KyMHLkSLi4uKBixYoAgPDwcGhoaMDIyEiqraWlJcLDwyVtPk8kP9Z/rFMkbg1ERERElM8mTpyI0aNHS5VpamrKPW7o0KF48OABLl26lF+h/TAmk0REREQyKGq6sqam5jclj5/z9PTE0aNHceHCBRQvXlxSbmVlhbS0NMTExEj1TkZERMDKykrS5saNG1Ln+7ja+2MbReEwNxEREZEsAqzmFovF8PT0xMGDB+Hv7w8HBwep+ho1akBdXR1nzpyRlAUFBSEkJATOzs4AAGdnZ9y/fx+RkZGSNn5+fjAwMED58uW/LyA52DNJREREJIMQt1McOnQoduzYgcOHD0NfX18yx9HQ0BDa2towNDRE//79MXr0aJiYmMDAwADDhg2Ds7Mz6tatCwBo0aIFypcvj169esHHxwfh4eGYPHkyhg4d+t09pPIwmSQiIiJSImvWrAEANG7cWKrc19cXHh4eAIAlS5ZARUUFXbp0QWpqKlq2bInVq1dL2qqqquLo0aP4/fff4ezsDF1dXfTp0wczZ85UeLzcZ5KUCveZzMZ9Jj/hPpPZ+DZk4z6T2bjPZLaC2GcyJPrbtu+Rx9ZEsb2ByoQ9k0REREQy8O84+bgAh4iIiIjyjD2TRERERDJwiol8TCaJiIiIZGI2KQ+TSSIAG9f/hTN+p/DixXNoammhatVqGDl6LOwdHIUOLV/t3b0Te3fvRFjoWwCAY8lSGDRkKFwaNAQApKamYvGC+Th14hjS0tLh7OKCiX9Og6mZmZBhK9ytmwHY4rsRgY8eICoqCouXrULTZp/ueSsWi7Fm1XIc2LcX8fFxqFqtOiZNmQ47O3vhgi4gt24GYPOmT+/NkuXS701hFRkRgVXLFuHK5YtITUlB8RK2mDJjDspVyL6dXZ2que/T5zlyDHp59C/IUPPMpbItRv3mjOplrGFtpo+uk/fgyOWgXNsuH9UGAzvUwLiVJ7Fy/6eNsB/vHAY7KyOptlPWncHCnVekykZ2rYt+7arD1tIQ72OT8NfhW/DZrrx3dKHvw2SSCMDNgBv4rbs7KlSqhMyMTKxYthhDBvbHgX+OQUdHR+jw8o2FpSWGjxwDWzs7iMViHPnnEEYNH4qdew+gZKnSWOTjjUsXzmP+omXQ09PD/LmzMHbUMPhu2yl06AqVnJyEMk5OcOvUBaNHeuao37xpPXZs34ZZc+ahWLHiWL1yGf4Y3B8HDh9X+H5tyiY5OQlOTk5w69wFo0fkfG8Ko7i4WAzycEf1WrWxdOVfMDYxQcirV9A3MJC0OX76vNQxVy5dxJwZU9DUtUVBh5tnulrquP8sAlv/vYPds7rKbNehvhNqly+G0Ki4XOtnbDoH36O3Jc/jk9Ok6hcNa4lmNR0xce1pPHgeCRMDLRjrayvmIgoAh7nlYzJJBGDNuo1Sz2fOmYcmDZwR+OghatSsJVBU+a9R46ZSzz2Hj8K+3btw/95dWFha4dCB/Zg7fwFq18neBHf6LG906dgG9+7eQeUqVQWIOH/Ub9AI9Rs0yrVOLBZj+7atGDjodzRpmt0jN2uuD5o1qoezZ06jVZu2BRlqgfvae1NYbfPdCAsrK0yd+Wn7HZtixaXamJqZSz2/cM4fNWrVRrHiJQokRkU4deMZTt149tU2Nmb6WDy8FdqP34GD3t1ybZOQlIqID4m51jnZmmFghxqo0e8vBL9+DwB4Ff5jcRc05pLycTU3US4S4uMBAAaGhgJHUnAyMzNx8t9jSE5OQuUqVRH46CEyMtJRp249SRsHR0dYWdvg3t07wgVawN6+eYN376JQx/nT+6Cvr49Klavg7t3/BIyM8suF8/4oV74iJo4diVZN6qPXb51xaP9eme3fv3+Hy5cuoINblwKMMv+JRMDGiR2xZPdVBL6MktluTA8XvDk0BlfXDcSo35yhqvIp/WpbrzRehMagTd3SCNzhicc7h2H12HYw1tcqiEugAsKeSaIvZGVlwWf+XFStVh2lS5cROpx8F/wkCB49uyMtLRXaOjpYtHQlHEuWQtDjQKirq0sN7QGAqakp3r97J1C0Be/du+xfoqamplLlJkXsfShKQt+8wYG9u9C9Zx94DBiERw8eYLHPXKirq6NtB7cc7Y//cxi6Ojpo3Kx5wQebj8Z0d0FGZhZWfTZH8kurD9zAf0/C8SE+GXUrFMfMgU1hZaoHr9V+AAB7a2PYWhmic+NyGOB9GCoqKvAZ2gI7pv+C1mP+LqhL+SEc5paPySTRF+bOnoFnwcHYvG2H0KEUCHsHB+zcdxAJ8fE443cSUydPwAbfbUKHRSSYrKwslCtfEX8MHwUAcCpbHs+fBePAvt25JpNHDh9AyzbtCtX82WplrDC0S23UG7T+q+2W770u+frB80ikZWRi5ei2mLLeH2npmVBREUFLQw39vQ/j6ZtoAMDvC47g6rqBKF3CVDL0rcyEuDf3z4bD3ESfmTt7Ji6cP4f1vltgaWUldDgFQl1dA7a2dihfoSKGjRyDMmXKYsffW2FqZo709HTEx0lPun///n2hW839NWb/nxv3/r30L73oIvY+FCVm5uZwKFlSqszeoSQiwsJytP3v9k28evkCHTr9UlDhFQiXSrawMNLFk90jEH/6T8Sf/hN2VkaY93tzPN45TOZxAYGhUFdTlazwDn+fgPSMTEkiCQCPX2X36JewMMjtFMpHpKBHIcaeSSJkL7LwnjML/mf8sHHzNhT/iSbRK1qWOAvpaWkoV74C1NTUceP6VTRr3hIA8PLFc4SHhRaqxTfyFCteHGZm5rhx7SrKli0HAEhISMD9e3fxa9fuAkdH+aFylep49fKFVFnIq5ewsrbJ0fbIwQMoW74CyjiVLajwCsQOv/vwvyX9Hhzx6YEdfvex9cRdmcdVKWWJzMwsRP1/Qc7VB6+hrqYKBxtjvAj9AAAoXSJ7ykhIRGw+RU8FjckkEYC5s2bg3+NHsXTFaujq6OJdVPY8OT19fWhpFd6J4iuWLkK9+g1hbW2NxMREnDh+FLcCbmDV2g3Q19eHW+cuWLRgPgwMDaGrqwcf79moXKVqoUsmk5ISERISInn+9u0bPH4cCENDQ1hb28C9V2+sX7cGtnZ2KFasOFatXAZzCws0KQL7LSYlfvHevHmDx4H/f29sciZXhUH3nr0xwMMdmzf8hWYtWuHRg/s4tH8vJk6ZLtUuISEBZ/xOYsSYccIE+oN0tdRRspiJ5Lm9tREql7TEh/hkvI6MQ3RcslT79MwsREQnSIam65QvhlrliuH8nVeIT0pF3QrFMf+PFth5+j5iElIAAP63nuP2kzD8Nb49xq08BRUVYOmI1jgd8Eyqt1KZFfJORYUQicVisdBBEH2UkiHM61ap4JRr+czZ3ujYqXMBRwNkZhXMx3LG1D9x4/pVvIuKgp6+PkqXdoJHvwGoW88FwKdNy0/+ewxp6WlwrlcfEydPlQz9FgSVApj9HnDjOgb2652jvH3HTpg1Z55k0/L9e/cgPj4O1arXwKTJ02Bn75DvsX0k1CKAgBvXMaBvzvemQ8dOmDV3XoHHk5KeWSCvc+nCOaxevgSvQ17BplhxdO/ZB25dfpVqc3DfHixZOA/H/c5DT1+/QOL6yLrNXPmN5GhQxQ6nlub8t9124i4Gzf8nR/njncOwct91yablVUtbYdnI1ihjawZNdVW8DIvBDr/7WL73GtI++3eyNtXD4uGt0KymIxJT0nHq+lNMWOOHD/EpP3wNyWen/PA55ImMT1fIeSz01RVyHmXEZJKUilDJpLIpqGTyZ1AQyeTPgG9DtoJKJpWdIpLJwoDJpHLgMDcRERGRDFzNLR+TSSIiIiJZmEvKxa2BiIiIiCjP2DNJREREJAM7JuVjMklEREQkAxe/ycdhbiIiIiLKM/ZMEhEREcnA1dzyMZkkIiIikoHD3PJxmJuIiIiI8ozJJBERERHlGYe5iYiIiGTgMLd8TCaJiIiIZOACHPk4zE1EREREecaeSSIiIiIZOMwtH5NJIiIiIhmYS8rHYW4iIiIiyjP2TBIRERHJwq5JuZhMEhEREcnA1dzycZibiIiIiPKMPZNEREREMnA1t3xMJomIiIhkYC4pH5NJIiIiIlmYTcrFOZNERERElGfsmSQiIiKSgau55WMySURERCQDF+DIx2FuIiIiIsozkVgsFgsdBJGySE1Nhbe3NyZOnAhNTU2hwxEM3wciIvpWTCaJPhMXFwdDQ0PExsbCwMBA6HAEw/eBiIi+FYe5iYiIiCjPmEwSERERUZ4xmSQiIiKiPGMySfQZTU1NTJs2rcgvOuH7QERE34oLcIiIiIgoz9gzSURERER5xmSSiIiIiPKMySQRERER5RmTSSIiIiLKMyaTRERERJRnTCaJiIiIKM/UhA6ASGjVqlWDSCTKUS4SiaClpYVSpUrBw8MDTZo0ESA6IiIi5cZkkoq8Vq1aYc2aNahUqRJq164NAAgICMC9e/fg4eGBR48ewdXVFQcOHEDHjh0FjjZ/derUSW5i3aNHDzg5OQkQHRERKSNuWk5F3sCBA2Fra4spU6ZIlc+ePRuvXr3C+vXrMW3aNBw7dgw3b94UKMqC4eHhgUOHDsHIyAg1atQAANy+fRsxMTFo0aIF7t69i5cvX+LMmTNwcXEROFoiIlIGTCapyDM0NMStW7dQqlQpqfKnT5+iRo0aiI2NxePHj1GrVi3Ex8cLFGXBmDBhAuLi4rBy5UqoqGRPqc7KysKIESOgr6+POXPmYMiQIXj48CEuXbokcLRERKQMuACHijwtLS1cuXIlR/mVK1egpaUFIDuh+vh1YbZx40aMHDlSkkgCgIqKCoYNG4Z169ZBJBLB09MTDx48EDBKIiJSJpwzSUXesGHDMGTIENy6dQu1atUCkD1ncsOGDZg0aRIA4OTJk6hataqAURaMjIwMPH78GGXKlJEqf/z4MTIzMwFkJ9+5zaskIqKiicPcRAC2b9+OlStXIigoCADg5OSEYcOGoUePHgCA5ORkySKUwmz48OHYuXMnJk2aJJVYz507Fz169MCyZcuwYcMGbN68mcPcREQEgMkkEX0mMzMT8+bNw8qVKxEREQEAsLS0xLBhw+Dl5QVVVVWEhIRARUUFxYsXFzhaIiJSBkwmif4vLS0NkZGRyMrKkiq3tbUVKCJhxcXFAQAMDAwEjoSIiJQZk0kq8oKDg9GvX78ci3DEYjFEIpFkriARERHlxAU4VOR5eHhATU0NR48ehbW1dZFeXBIREYGxY8fizJkziIyMxJd/azKxJiKiLzGZpCLvzp07uHXrFsqWLSt0KILz8PBASEgIpkyZUuQTayIi+jZMJqnIK1++PN69eyd0GErh0qVLuHjxYpHYBomIiBSDm5ZTkTd//nyMHz8e586dw/v37xEXFyf1KEpKlCiRY2ibiIjoa7gAh4q8j3d7+XJItyguwDl16hQWLVqEv/76C/b29kKHQ0REPwEmk1TknT9//qv1jRo1KqBIhGdsbIykpCRkZGRAR0cH6urqUvXR0dECRUZERMqKcyapyCtKyaI8S5cuFToEIiL6ybBnkoqke/fuoWLFilBRUcG9e/e+2rZy5coFFBUREdHPh8kkFUkqKioIDw+HhYUFVFRUIBKJcl14UhTmTMbFxUnuciNvwRHvhkNERF/iMDcVSS9evIC5ubnk66LM2NgYYWFhsLCwgJGRUa57SxbFxUhERPRtmExSkWRnZyf52szMDLq6ugJGIyx/f3+YmJhIvuZG5URE9D04zE1Fnp6eHrp27Yp+/fqhfv36QodDRET0U+Gm5VTk/f3334iOjkbTpk1RpkwZzJs3D6GhoUKHJQgHBwfMnDkTISEhQodCREQ/CSaTVOS5ubnh0KFDePv2LYYMGYIdO3bAzs4O7dq1w4EDB5CRkSF0iAVmxIgROHDgABwdHdG8eXPs2rULqampQodFRERKjMPcRLlYsWIFxo0bh7S0NJiZmWHIkCGYMGECdHR0hA6tQNy+fRubN2/Gzp07kZmZiR49eqBfv36oXr260KEREZGSYTJJ9H8RERHYsmULNm/ejFevXqFTp07o378/3rx5g/nz58PGxganTp0SOswClZ6ejtWrV8PLywvp6emoVKkShg8fjr59+3KhDhERAWAySYQDBw7A19cXJ0+eRPny5TFgwAD07NkTRkZGkjbPnj1DuXLlkJaWJlygBSg9PR0HDx6Er68v/Pz8ULduXUlivWrVKjRt2hQ7duwQOkwiIlIC3BqIiry+ffuiW7duuHz5MmrVqpVrGxsbG/z5558FHFnBu337Nnx9fbFz506oqKigd+/eWLJkCcqWLStp06lTJ5nvExERFT3smaQiLykpqcjMhZRHVVUVzZs3R//+/eHm5gZ1dfUcbRITE+Hp6QlfX18BIiQiImXDZJKKJHm3DfxcUbqF4KtXr6Q2dCciIpKHySQVSR/vx/01vIUgERGRfJwzSUXS2bNnhQ5BaRgbG3/zyuzo6Oh8joaIiH42TCapSGrUqJHQISiNpUuXCh0CERH9xDjMTUXSvXv3vrlt5cqV8zESIiKinxuTSSqSPs6ZlPftXxTmTHIxEhER/QgOc1OR9OLFC6FDUBpGRkZcjERERHnGZJKKJG5/8wkXIxER0Y/gMDcVeVu3bv1qfe/evQsoEiIiop8Pk0kq8oyNjaWep6enIykpCRoaGtDR0SlS2+FcuHDhq/UNGzYsoEiIiOhnwWSSKBfBwcH4/fffMW7cOLRs2VLocAqMiopKjrLP51NyziQREX0p528OIkLp0qUxb948jBgxQuhQCtSHDx+kHpGRkThx4gRq1aqFU6dOCR0eEREpIS7AIZJBTU0NoaGhQodRoAwNDXOUNW/eHBoaGhg9ejRu3bolQFRERKTMmExSkffPP/9IPReLxQgLC8PKlSvh4uIiUFTKxdLSEkFBQUKHQURESohzJqnI+3KeoEgkgrm5OZo2bYpFixbB2tpaoMgK3pd3BvqYWM+bNw8ZGRm4dOmSQJEREZGyYjJJRBKy7gxUt25dbNq0CWXLlhUoMiIiUlZMJok+8/HjIO+OMIXVq1evpJ6rqKjA3NwcWlpaAkVERETKjqu5iQBs3LgRFStWhJaWFrS0tFCxYkVs2LBB6LAKnJ2dndSjRIkSTCSJiOirmExSkTd16lSMGDEC7du3x969e7F37160b98eo0aNwtSpU4UOr8CdOXMG7dq1Q8mSJVGyZEm0a9cOp0+fFjosIiJSUhzmpiLP3Nwcy5cvR/fu3aXKd+7ciWHDhuHdu3cCRVbwVq9ejREjRuCXX36Bs7MzAODatWvYt28flixZgqFDhwocIRERKRsmk1TkGRkZISAgAKVLl5Yqf/LkCWrXro2YmBhhAhNA8eLFMWHCBHh6ekqVr1q1CnPnzsXbt28FioyIiJQVh7mpyOvVqxfWrFmTo3zdunVwd3cXICLhxMTEoFWrVjnKW7RogdjYWAEiIiIiZcdNy6lIGj16tORrkUiEDRs24NSpU6hbty4A4Pr16wgJCUHv3r2FClEQHTp0wMGDBzFu3Dip8sOHD6Ndu3YCRUVERMqMw9xUJDVp0uSb2olEIvj7++dzNMJavny55Ou4uDgsXLgQLi4uUnMmL1++jDFjxmDy5MlChUlEREqKySRREefg4PBN7UQiEZ4/f57P0RAR0c+GySQVaenp6dDW1sadO3dQsWJFocMhIiL66XABDhVp6urqsLW1RWZmptChCC49PR0lS5ZEYGCg0KEQEdFPhMkkFXl//vknJk2ahOjoaKFDEZS6ujpSUlKEDoOIiH4yHOamIq9atWp4+vQp0tPTYWdnB11dXan627dvCxRZwZs7dy6ePHmCDRs2QE2Nmz0QEZF8/G1BRZ6bm5vQISiNgIAAnDlzBqdOnUKlSpVyJNYHDhwQKDIiIlJW7JkkIom+fft+td7X17eAIiEiop8Fk0kiZN/5Zd++fXj27BnGjRsHExMT3L59G5aWlihWrJjQ4RERESktJpNU5N27dw+urq4wNDTEy5cvERQUBEdHR0yePBkhISHYunWr0CEWqIyMDJw7dw7Pnj1Djx49oK+vj9DQUBgYGEBPT0/o8IiISMlwNTcVeaNHj4aHhweCg4OhpaUlKW/Tpg0uXLggYGQF79WrV6hUqRI6duyIoUOHIioqCgAwf/58jB07VuDoiIhIGTGZpCIvICAAgwcPzlFerFgxhIeHCxCRcEaMGIGaNWviw4cP0NbWlpR36tQJZ86cETAyIiJSVlzNTUWepqYm4uLicpQ/efIE5ubmAkQknIsXL+LKlSvQ0NCQKre3t8fbt28FioqIiJQZeyapyOvQoQNmzpyJ9PR0ANn3oA4JCYGXlxe6dOkicHQFKysrK9e7Ab158wb6+voCRERERMqOySQVeYsWLUJCQgIsLCyQnJyMRo0aoVSpUtDX18ecOXOEDq9AtWjRAkuXLpU8F4lESEhIwLRp09CmTRvhAiMiIqXF1dxE/3fp0iXcu3cPCQkJqF69OlxdXYUOqcC9efMGLVu2hFgsRnBwMGrWrIng4GCYmZnhwoULsLCwEDpEIiJSMkwmiUhKRkYGdu3aJZVYu7u7Sy3IISIi+ojJJBGAM2fOYMmSJQgMDAQAlCtXDiNHjiySvZNERETfg3MmqchbvXo1WrVqBX19fYwYMQIjRoyAgYEB2rRpg1WrVgkdXoELCgqCp6cnmjVrhmbNmsHT0xOPHz8WOiwiIlJS7JmkIq948eKYMGECPD09pcpXrVqFuXPnFqktcfbv349u3bqhZs2acHZ2BgBcu3YNAQEB2LVrV5Fb3U5ERPIxmaQiT09PD3fu3EGpUqWkyoODg1GtWjUkJCQIFFnBK1myJNzd3TFz5kyp8mnTpuHvv//Gs2fPBIqMiIiUFYe5qcjr0KEDDh48mKP88OHDaNeunQARCScsLAy9e/fOUd6zZ0+EhYUJEBERESk73gGHiqTly5dLvi5fvjzmzJmDc+fOSQ3tXr58GWPGjBEqREE0btwYFy9ezNFLe+nSJTRo0ECgqIiISJlxmJuKJAcHh29qJxKJ8Pz583yORlj//POP5OvQ0FBMnToVXbt2Rd26dQFkJ9Z79+7FjBkzMGTIEKHCJCIiJcVkkqiIU1H5ttkuIpEo11stEhFR0cY5k1TknT17VugQBJWVlfVNDyaSRESUGyaTVOS1atUKJUuWxOzZs/H69WuhwxFUYR/SJyIixWMySUXe27dv4enpiX379sHR0REtW7bEnj17kJaWJnRoBa5UqVJo0qQJ/v77b6SkpAgdDhER/QQ4Z5LoM7dv34avry927vxfe3cfk1XZwHH8dy9eIsAQBQNDwFAjI4ZRDds0hIyxlcqsnMXLALfC8CVfkD9qIUu0pettA5zy0gpf0GIMXEzuBilbunRYOSIhHZIaLGeGDAFvnj96Ok93qPHcS86tfD//cZ3DOT/uP9zP6zrnundJkpYuXaqMjAxFRkaanGx0NDc3G39/f3+/XnzxRWVkZOjxxx83OxoAwElRJoG/OXfunLZv367NmzfLxcVFfX19iomJUVFRkWbOnGl2vFExODio6upqlZWV6YsvvtD06dOVnp6u5ORk+fn5mR0PAOBEWOYGJA0MDGjfvn1KTExUcHCw6urq9NFHH+mXX35RW1ubgoOD9fzzz5sdc9S4uLgoKSlJlZWV2rJli9ra2rR27VoFBQUpJSWFDcwBAAZmJjHmZWdna9euXRoaGlJycrIyMzP18MMP251z4cIFBQYGymazmZRydH3zzTcqKSnR7t275enpqdTUVGVkZKizs1N5eXm6fPmyjh49anZMAIAToExizIuLi9OyZcu0aNEiubu7X/ecwcFBNTU1ae7cuaOcbnRt27ZNpaWlam1tVWJiojIzM5WYmGi3F2VnZ6dCQkI0ODhoYlIAgLPg6xQx5sXFxam3t3dYkSwpKVF3d7dycnLk4uJyxxdJSSosLFR6errS0tIUEBBw3XP8/f21c+fOUU4GAHBWzExizAsJCVFFRYVmz55tN37kyBEtWbJEp0+fNikZAADOjxdwMOZduHDhurNwfn5+Y+5Fk9LSUlVWVg4br6ysVHl5uQmJAADOjjKJMS8oKEhNTU3DxpuamhQYGGhCIvMUFBRo4sSJw8b9/f21adMmExIBAJwdz0xizFu2bJlWrVqlgYEBzZs3T5JktVq1fv16rVmzxuR0o6ujo0OhoaHDxoODg9XR0WFCIgCAs6NMYsxbt26dfv31V2VlZRlfoXj33XcrJydHubm5JqcbXf7+/vr2228VEhJiN37ixAlNmDDBnFAAAKfGCzjAf/X09KilpUUeHh6aNm3aDbcJupPl5ORoz549Ki0t1Zw5cyRJjY2NSk9P1+LFi/Xuu++anBAA4GwokwAM/f39Sk5OVmVlpVxc/li4sNlsSklJUVFRkdzc3ExOCABwNpRJAMOcOnVKzc3N8vDwUEREhIKDg82OBABwUjwzCWCYadOmqaurS9HR0WNyuR8AMHLMTAK4rnHjxqm5uVlTp041OwoAwImxzySA6+L/mQCAkaBMAgAAwGGUSQDXVVxcrEmTJpkdAwDg5HhmEgAAAA7jbW4AhitXrmjz5s2yWq3q6uqSzWazO/7TTz+ZlAwA4KwokwAMmZmZamxsVHJysgICAmSxWMyOBABwcixzAzD4+PiotrZWTz75pNlRAAC3CV7AAWAYP368fH19zY4BALiNUCYBGPLz8/Xmm2+qt7fX7CgAgNsEy9wADFFRUWpvb9fQ0JBCQkLk6upqd/z48eMmJQMAOCtewAFgWLhwodkRAAC3GWYmAQAA4DBmJgEMc+zYMbW0tEiSZs6cqaioKJMTAQCcFWUSgKGrq0tLlixRQ0ODfHx8JEmXLl1SbGysdu/eLT8/P3MDAgCcDm9zAzBkZ2fr999/18mTJ3Xx4kVdvHhR33//vS5fvqwVK1aYHQ8A4IR4ZhKA4d5771V9fb0ee+wxu/GjR49q/vz5unTpkjnBAABOi5lJAAabzTZsOyBJcnV1HfY93QAASJRJAH8xb948rVy5UufOnTPGfv75Z61evVpxcXEmJgMAOCuWuQEYzp49q+eee04nT55UUFCQJKmjo0MRERGqrq7W/fffb3JCAICzoUwCsDM0NCSr1WpsDRQeHq74+HiTUwEAnBVlEoAdq9Uqq9Wqrq6uYc9JlpSUmJQKAOCs2GcSgCEvL08bN25UdHS0AgICZLFYzI4EAHByzEwCMAQEBOidd95RcnKy2VEAALcJ3uYGYOjv79fs2bPNjgEAuI1QJgEYMjMzVVFRYXYMAMBthGcmARj6+vq0fft21dfX65FHHhm2gfm2bdtMSgYAcFY8MwnAEBsbe8NjFotFX3755SimAQDcDiiTAAAAcBjPTAIAAMBhlEkAAAA4jDIJAAAAh1EmAcCJpKWlaeHChcbPTz31lFatWjXqORoaGmSxWHTp0qVRvzeA2wtlEgBGIC0tTRaLRRaLRW5ubgoLC9PGjRs1ODh4S+/72WefKT8/f0TnUgABmIF9JgFghBISElRaWqqrV6/qwIEDWr58uVxdXZWbm2t3Xn9/v9zc3P6Ve/r6+v4r1wGAW4WZSQAYIXd3d913330KDg7Wq6++qvj4eFVXVxtL02+//bYCAwM1Y8YMSdLZs2f1wgsvyMfHR76+vlqwYIHOnDljXO/atWt6/fXX5ePjowkTJmj9+vX6+25tf1/mvnr1qnJychQUFCR3d3eFhYVp586dOnPmjLFP6Pjx42WxWJSWliZJstlsKigoUGhoqDw8PBQZGal9+/bZ3efAgQOaPn26PDw8FBsba5cTAG6GMgkADvLw8FB/f78kyWq1qrW1VQcPHlRNTY0GBgb0zDPPyNvbW4cOHVJTU5O8vLyUkJBg/M7WrVtVVlamkpISHT58WBcvXtTnn39+03umpKRo165d+uCDD9TS0qLi4mJ5eXkpKChI+/fvlyS1trbq/Pnzev/99yVJBQUF+vjjj1VUVKSTJ09q9erVevnll9XY2Cjpj9KblJSkZ599Vs3NzcrMzNSGDRtu1ccG4A7DMjcA/J+GhoZktVpVV1en7OxsdXd3y9PTUzt27DCWtz/55BPZbDbt2LFDFotFklRaWiofHx81NDRo/vz5eu+995Sbm6ukpCRJUlFRkerq6m543x9//FF79+7VwYMHFR8fL0maOnWqcfzPJXF/f3/5+PhI+mMmc9OmTaqvr1dMTIzxO4cPH1ZxcbHmzp2rwsJCPfDAA9q6daskacaMGfruu++0ZcuWf/FTA3CnokwCwAjV1NTIy8tLAwMDstlsWrp0qd566y0tX75cERERds9JnjhxQm1tbfL29ra7Rl9fn9rb2/Xbb7/p/PnzeuKJJ4xjLi4uio6OHrbU/afm5mbdddddmjt37ogzt7W1qbe3V08//bTdeH9/v6KioiRJLS0tdjkkGcUTAP4JZRIARig2NlaFhYVyc3NTYGCgXFz+90+op6en3bk9PT169NFH9emnnw67jp+fn0P39/Dw+L9/p6enR5JUW1uryZMn2x1zd3d3KAcA/BVlEgBGyNPTU2FhYSM6d9asWdqzZ4/8/f01bty4654TEBCgI0eOaM6cOZKkwcFBHTt2TLNmzbru+REREbLZbGpsbDSWuf/qz5nRa9euGWMPPfSQ3N3d1dHRccMZzfDwcFVXV9uNff311//8RwKAeAEHAG6Jl156SRMnTtSCBQt06NAhnT59Wg0NDVqxYoU6OzslSStXrtTmzZtVVVWlH374QVlZWTfdIzIkJESpqalKT09XVVWVcc29e/dKkoKDg2WxWFRTU6Pu7m719PTI29tba9eu1erVq1VeXq729nYdP35cH374ocrLyyVJr7zyik6dOqV169aptbVVFRUVKisru9UfEYA7BGUSAG6Be+65R1999ZWmTJmipKQkhYeHKyMjQ319fcZM5Zo1a5ScnKzU1FTFxMTI29tbixYtuul1CwsLtXjxYmVlZenBBx/UsmXLdOXKFUnS5MmTlZeXpw0bNmjSpEl67bXXJEn5+fl64403VFBQoPDwcCUkJKi2tlahoaGSpClTpmj//v2qqqpSZGSkioqKtGnTplv46QC4k1iGbvSkNwAAAPAPmJkEAACAwyiTAAAAcBhlEgAAAA6jTAIAAMBhlEkAAAA4jDIJAAAAh1EmAQAA4DDKJAAAABxGmQQAAIDDKJMAAABwGGUSAAAADqNMAgAAwGH/Aa+nlmq3vPrEAAAAAElFTkSuQmCC\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.model_selection import GridSearchCV\n",
+        "from sklearn.linear_model import LogisticRegression\n",
+        "\n",
+        "# Define the parameter grid for tuning\n",
+        "param_grid = {'C': [0.1, 1, 10], 'max_iter': [100, 200, 300]}\n",
+        "\n",
+        "# Initialize GridSearchCV\n",
+        "grid_search = GridSearchCV(LogisticRegression(), param_grid, cv=5, scoring='accuracy')\n",
+        "\n",
+        "# Fit the model\n",
+        "grid_search.fit(X_train_tfidf, y_train)\n",
+        "\n",
+        "# Best parameters\n",
+        "print(\"Best parameters found:\", grid_search.best_params_)\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "7csEVeMxSHXX",
+        "outputId": "6b985b2a-4da6-4d6e-963c-500cddee15dc"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n",
+            "/usr/local/lib/python3.10/dist-packages/sklearn/linear_model/_logistic.py:469: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+            "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+            "\n",
+            "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+            "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+            "Please also refer to the documentation for alternative solver options:\n",
+            "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+            "  n_iter_i = _check_optimize_result(\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Best parameters found: {'C': 1, 'max_iter': 200}\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install flask ngork"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "F3UvRkWLUE9N",
+        "outputId": "b9bb438b-2e3e-440d-914d-ce0355cd36cb"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: flask in /usr/local/lib/python3.10/dist-packages (3.0.3)\n",
+            "\u001b[31mERROR: Could not find a version that satisfies the requirement ngork (from versions: none)\u001b[0m\u001b[31m\n",
+            "\u001b[0m\u001b[31mERROR: No matching distribution found for ngork\u001b[0m\u001b[31m\n",
+            "\u001b[0m"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install flask joblib nltk\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "VJGm7tkDUjLG",
+        "outputId": "4a972a6f-7ff7-4917-af23-2e4923f9d69f"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: flask in /usr/local/lib/python3.10/dist-packages (3.0.3)\n",
+            "Requirement already satisfied: joblib in /usr/local/lib/python3.10/dist-packages (1.4.2)\n",
+            "Requirement already satisfied: nltk in /usr/local/lib/python3.10/dist-packages (3.9.1)\n",
+            "Requirement already satisfied: Werkzeug>=3.0.0 in /usr/local/lib/python3.10/dist-packages (from flask) (3.1.3)\n",
+            "Requirement already satisfied: Jinja2>=3.1.2 in /usr/local/lib/python3.10/dist-packages (from flask) (3.1.4)\n",
+            "Requirement already satisfied: itsdangerous>=2.1.2 in /usr/local/lib/python3.10/dist-packages (from flask) (2.2.0)\n",
+            "Requirement already satisfied: click>=8.1.3 in /usr/local/lib/python3.10/dist-packages (from flask) (8.1.7)\n",
+            "Requirement already satisfied: blinker>=1.6.2 in /usr/local/lib/python3.10/dist-packages (from flask) (1.9.0)\n",
+            "Requirement already satisfied: regex>=2021.8.3 in /usr/local/lib/python3.10/dist-packages (from nltk) (2024.9.11)\n",
+            "Requirement already satisfied: tqdm in /usr/local/lib/python3.10/dist-packages (from nltk) (4.66.6)\n",
+            "Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.10/dist-packages (from Jinja2>=3.1.2->flask) (3.0.2)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from flask import Flask, request, jsonify\n",
+        "import joblib\n",
+        "import re\n",
+        "from nltk.corpus import stopwords\n",
+        "from flask_ngrok import run_with_ngrok\n",
+        "\n",
+        "# Load the trained model and vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n",
+        "# Initialize Flask app\n",
+        "app = Flask(_name_)\n",
+        "\n",
+        "# Use Ngrok for Flask app tunneling\n",
+        "run_with_ngrok(app)\n",
+        "\n",
+        "# Define a function to preprocess the text (same as what you used for training)\n",
+        "def preprocess_text(text):\n",
+        "    # Convert to lowercase\n",
+        "    text = text.lower()\n",
+        "    # Remove URLs\n",
+        "    text = re.sub(r\"http\\S+|www\\S+|https\\S+\", '', text)\n",
+        "    # Remove mentions and hashtags\n",
+        "    text = re.sub(r'@\\w+|#', '', text)\n",
+        "    # Remove non-alphabetic characters\n",
+        "    text = re.sub(r'[^a-zA-Z\\s]', '', text)\n",
+        "    # Remove stopwords\n",
+        "    stop_words = set(stopwords.words('english'))\n",
+        "    text = \" \".join(word for word in text.split() if word not in stop_words)\n",
+        "    return text\n",
+        "\n",
+        "# Define the home route (basic home page)\n",
+        "@app.route('/')\n",
+        "def home():\n",
+        "    return \"Welcome to the Cyberbullying Prediction API!\"\n",
+        "\n",
+        "# Define the prediction route\n",
+        "@app.route('/predict', methods=['POST'])\n",
+        "def predict():\n",
+        "    # Get the JSON data from the request\n",
+        "    data = request.get_json()\n",
+        "\n",
+        "    # Extract the tweet text\n",
+        "    tweet = data['tweet']\n",
+        "\n",
+        "    # Preprocess the tweet\n",
+        "    processed_tweet = preprocess_text(tweet)\n",
+        "\n",
+        "    # Convert the tweet to a numeric vector\n",
+        "    vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "    # Get the model's prediction\n",
+        "    prediction = model.predict(vectorized_tweet)\n",
+        "\n",
+        "    # Return the prediction as a JSON response\n",
+        "    return jsonify({'prediction': prediction[0]})\n",
+        "\n",
+        "# Run the app\n",
+        "app.run()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 399
+        },
+        "id": "k5vdJ2UmU-ie",
+        "outputId": "877c39be-d146-48f0-a3a7-68e2eeb66ed1"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "error",
+          "ename": "ModuleNotFoundError",
+          "evalue": "No module named 'flask_ngrok'",
+          "traceback": [
+            "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+            "\u001b[0;31mModuleNotFoundError\u001b[0m                       Traceback (most recent call last)",
+            "\u001b[0;32m<ipython-input-47-fe02f71ab0bc>\u001b[0m in \u001b[0;36m<cell line: 5>\u001b[0;34m()\u001b[0m\n\u001b[1;32m      3\u001b[0m \u001b[0;32mimport\u001b[0m \u001b[0mre\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      4\u001b[0m \u001b[0;32mfrom\u001b[0m \u001b[0mnltk\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcorpus\u001b[0m \u001b[0;32mimport\u001b[0m \u001b[0mstopwords\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m----> 5\u001b[0;31m \u001b[0;32mfrom\u001b[0m \u001b[0mflask_ngrok\u001b[0m \u001b[0;32mimport\u001b[0m \u001b[0mrun_with_ngrok\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m      6\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      7\u001b[0m \u001b[0;31m# Load the trained model and vectorizer\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;31mModuleNotFoundError\u001b[0m: No module named 'flask_ngrok'",
+            "",
+            "\u001b[0;31m---------------------------------------------------------------------------\u001b[0;32m\nNOTE: If your import is failing due to a missing package, you can\nmanually install dependencies using either !pip or !apt.\n\nTo view examples of installing some common dependencies, click the\n\"Open Examples\" button below.\n\u001b[0;31m---------------------------------------------------------------------------\u001b[0m\n"
+          ],
+          "errorDetails": {
+            "actions": [
+              {
+                "action": "open_url",
+                "actionText": "Open Examples",
+                "url": "/notebooks/snippets/importing_libraries.ipynb"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install flask-ngrok # Install the 'flask-ngrok' library if not already installed\n",
+        "\n",
+        "from flask import Flask, request, jsonify\n",
+        "import joblib\n",
+        "import re\n",
+        "from nltk.corpus import stopwords\n",
+        "from flask_ngrok import run_with_ngrok # Import run_with_ngrok after installing flask-ngrok\n",
+        "\n",
+        "# ... (rest of your code)\n",
+        "# Load the trained model and vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n",
+        "# Initialize Flask app\n",
+        "app = Flask(__name__)  # Change _name_ to __name_\n",
+        "\n",
+        "# Use Ngrok for Flask app tunneling\n",
+        "run_with_ngrok(app)\n",
+        "\n",
+        "# Define a function to preprocess the text (same as what you used for training)\n",
+        "def preprocess_text(text):\n",
+        "    # Convert to lowercase\n",
+        "    text = text.lower()\n",
+        "    # Remove URLs\n",
+        "    text = re.sub(r\"http\\S+|www\\S+|https\\S+\", '', text)\n",
+        "    # Remove mentions and hashtags\n",
+        "    text = re.sub(r'@\\w+|#', '', text)\n",
+        "    # Remove non-alphabetic characters\n",
+        "    text = re.sub(r'[^a-zA-Z\\s]', '', text)\n",
+        "    # Remove stopwords\n",
+        "    stop_words = set(stopwords.words('english'))\n",
+        "    text = \" \".join(word for word in text.split() if word not in stop_words)\n",
+        "    return text\n",
+        "\n",
+        "# Define the home route (basic home page)\n",
+        "@app.route('/')\n",
+        "def home():\n",
+        "    return \"Welcome to the Cyberbullying Prediction API!\"\n",
+        "\n",
+        "# Define the prediction route\n",
+        "@app.route('/predict', methods=['POST'])\n",
+        "def predict():\n",
+        "    # Get the JSON data from the request\n",
+        "    data = request.get_json()\n",
+        "\n",
+        "    # Extract the tweet text\n",
+        "    tweet = data['tweet']\n",
+        "\n",
+        "    # Preprocess the tweet\n",
+        "    processed_tweet = preprocess_text(tweet)\n",
+        "\n",
+        "    # Convert the tweet to a numeric vector\n",
+        "    vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "    # Get the model's prediction\n",
+        "    prediction = model.predict(vectorized_tweet)\n",
+        "\n",
+        "    # Return the prediction as a JSON response\n",
+        "    return jsonify({'prediction': prediction[0]})\n",
+        "\n",
+        "# Run the app\n",
+        "app.run()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "hvVK2y4YVZ05",
+        "outputId": "80f2bde3-fc62-414b-9b9c-f74d8cec472d"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: flask-ngrok in /usr/local/lib/python3.10/dist-packages (0.0.25)\n",
+            "Requirement already satisfied: Flask>=0.8 in /usr/local/lib/python3.10/dist-packages (from flask-ngrok) (3.0.3)\n",
+            "Requirement already satisfied: requests in /usr/local/lib/python3.10/dist-packages (from flask-ngrok) (2.32.3)\n",
+            "Requirement already satisfied: Werkzeug>=3.0.0 in /usr/local/lib/python3.10/dist-packages (from Flask>=0.8->flask-ngrok) (3.1.3)\n",
+            "Requirement already satisfied: Jinja2>=3.1.2 in /usr/local/lib/python3.10/dist-packages (from Flask>=0.8->flask-ngrok) (3.1.4)\n",
+            "Requirement already satisfied: itsdangerous>=2.1.2 in /usr/local/lib/python3.10/dist-packages (from Flask>=0.8->flask-ngrok) (2.2.0)\n",
+            "Requirement already satisfied: click>=8.1.3 in /usr/local/lib/python3.10/dist-packages (from Flask>=0.8->flask-ngrok) (8.1.7)\n",
+            "Requirement already satisfied: blinker>=1.6.2 in /usr/local/lib/python3.10/dist-packages (from Flask>=0.8->flask-ngrok) (1.9.0)\n",
+            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.10/dist-packages (from requests->flask-ngrok) (3.4.0)\n",
+            "Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.10/dist-packages (from requests->flask-ngrok) (3.10)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.10/dist-packages (from requests->flask-ngrok) (2.2.3)\n",
+            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.10/dist-packages (from requests->flask-ngrok) (2024.8.30)\n",
+            "Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.10/dist-packages (from Jinja2>=3.1.2->Flask>=0.8->flask-ngrok) (3.0.2)\n",
+            " * Serving Flask app '__main__'\n",
+            " * Debug mode: off\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "INFO:werkzeug:\u001b[31m\u001b[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.\u001b[0m\n",
+            " * Running on http://127.0.0.1:5000\n",
+            "INFO:werkzeug:\u001b[33mPress CTRL+C to quit\u001b[0m\n",
+            "Exception in thread Thread-12:\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/connection.py\", line 199, in _new_conn\n",
+            "    sock = connection.create_connection(\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/util/connection.py\", line 85, in create_connection\n",
+            "    raise err\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/util/connection.py\", line 73, in create_connection\n",
+            "    sock.connect(sa)\n",
+            "ConnectionRefusedError: [Errno 111] Connection refused\n",
+            "\n",
+            "The above exception was the direct cause of the following exception:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/connectionpool.py\", line 789, in urlopen\n",
+            "    response = self._make_request(\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/connectionpool.py\", line 495, in _make_request\n",
+            "    conn.request(\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/connection.py\", line 441, in request\n",
+            "    self.endheaders()\n",
+            "  File \"/usr/lib/python3.10/http/client.py\", line 1278, in endheaders\n",
+            "    self._send_output(message_body, encode_chunked=encode_chunked)\n",
+            "  File \"/usr/lib/python3.10/http/client.py\", line 1038, in _send_output\n",
+            "    self.send(msg)\n",
+            "  File \"/usr/lib/python3.10/http/client.py\", line 976, in send\n",
+            "    self.connect()\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/connection.py\", line 279, in connect\n",
+            "    self.sock = self._new_conn()\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/connection.py\", line 214, in _new_conn\n",
+            "    raise NewConnectionError(\n",
+            "urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7d76b03b5990>: Failed to establish a new connection: [Errno 111] Connection refused\n",
+            "\n",
+            "The above exception was the direct cause of the following exception:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/requests/adapters.py\", line 667, in send\n",
+            "    resp = conn.urlopen(\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/connectionpool.py\", line 843, in urlopen\n",
+            "    retries = retries.increment(\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/urllib3/util/retry.py\", line 519, in increment\n",
+            "    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]\n",
+            "urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7d76b03b5990>: Failed to establish a new connection: [Errno 111] Connection refused'))\n",
+            "\n",
+            "During handling of the above exception, another exception occurred:\n",
+            "\n",
+            "Traceback (most recent call last):\n",
+            "  File \"/usr/lib/python3.10/threading.py\", line 1016, in _bootstrap_inner\n",
+            "    self.run()\n",
+            "  File \"/usr/lib/python3.10/threading.py\", line 1378, in run\n",
+            "    self.function(*self.args, **self.kwargs)\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/flask_ngrok.py\", line 70, in start_ngrok\n",
+            "    ngrok_address = _run_ngrok()\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/flask_ngrok.py\", line 35, in _run_ngrok\n",
+            "    tunnel_url = requests.get(localhost_url).text  # Get the tunnel information\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/requests/api.py\", line 73, in get\n",
+            "    return request(\"get\", url, params=params, **kwargs)\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/requests/api.py\", line 59, in request\n",
+            "    return session.request(method=method, url=url, **kwargs)\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/requests/sessions.py\", line 589, in request\n",
+            "    resp = self.send(prep, **send_kwargs)\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/requests/sessions.py\", line 703, in send\n",
+            "    r = adapter.send(request, **kwargs)\n",
+            "  File \"/usr/local/lib/python3.10/dist-packages/requests/adapters.py\", line 700, in send\n",
+            "    raise ConnectionError(e, request=request)\n",
+            "requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=4040): Max retries exceeded with url: /api/tunnels (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7d76b03b5990>: Failed to establish a new connection: [Errno 111] Connection refused'))\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import files\n",
+        "uploaded=files.upload()\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 354
+        },
+        "id": "d4HRs9N_aCgW",
+        "outputId": "70d3452d-3621-4595-9de2-36a5aff0f292"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "\n",
+              "     <input type=\"file\" id=\"files-d12e3981-f91a-4ac7-9fc4-1e25680da1e0\" name=\"files[]\" multiple disabled\n",
+              "        style=\"border:none\" />\n",
+              "     <output id=\"result-d12e3981-f91a-4ac7-9fc4-1e25680da1e0\">\n",
+              "      Upload widget is only available when the cell has been executed in the\n",
+              "      current browser session. Please rerun this cell to enable.\n",
+              "      </output>\n",
+              "      <script>// Copyright 2017 Google LLC\n",
+              "//\n",
+              "// Licensed under the Apache License, Version 2.0 (the \"License\");\n",
+              "// you may not use this file except in compliance with the License.\n",
+              "// You may obtain a copy of the License at\n",
+              "//\n",
+              "//      http://www.apache.org/licenses/LICENSE-2.0\n",
+              "//\n",
+              "// Unless required by applicable law or agreed to in writing, software\n",
+              "// distributed under the License is distributed on an \"AS IS\" BASIS,\n",
+              "// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n",
+              "// See the License for the specific language governing permissions and\n",
+              "// limitations under the License.\n",
+              "\n",
+              "/**\n",
+              " * @fileoverview Helpers for google.colab Python module.\n",
+              " */\n",
+              "(function(scope) {\n",
+              "function span(text, styleAttributes = {}) {\n",
+              "  const element = document.createElement('span');\n",
+              "  element.textContent = text;\n",
+              "  for (const key of Object.keys(styleAttributes)) {\n",
+              "    element.style[key] = styleAttributes[key];\n",
+              "  }\n",
+              "  return element;\n",
+              "}\n",
+              "\n",
+              "// Max number of bytes which will be uploaded at a time.\n",
+              "const MAX_PAYLOAD_SIZE = 100 * 1024;\n",
+              "\n",
+              "function _uploadFiles(inputId, outputId) {\n",
+              "  const steps = uploadFilesStep(inputId, outputId);\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  // Cache steps on the outputElement to make it available for the next call\n",
+              "  // to uploadFilesContinue from Python.\n",
+              "  outputElement.steps = steps;\n",
+              "\n",
+              "  return _uploadFilesContinue(outputId);\n",
+              "}\n",
+              "\n",
+              "// This is roughly an async generator (not supported in the browser yet),\n",
+              "// where there are multiple asynchronous steps and the Python side is going\n",
+              "// to poll for completion of each step.\n",
+              "// This uses a Promise to block the python side on completion of each step,\n",
+              "// then passes the result of the previous step as the input to the next step.\n",
+              "function _uploadFilesContinue(outputId) {\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  const steps = outputElement.steps;\n",
+              "\n",
+              "  const next = steps.next(outputElement.lastPromiseValue);\n",
+              "  return Promise.resolve(next.value.promise).then((value) => {\n",
+              "    // Cache the last promise value to make it available to the next\n",
+              "    // step of the generator.\n",
+              "    outputElement.lastPromiseValue = value;\n",
+              "    return next.value.response;\n",
+              "  });\n",
+              "}\n",
+              "\n",
+              "/**\n",
+              " * Generator function which is called between each async step of the upload\n",
+              " * process.\n",
+              " * @param {string} inputId Element ID of the input file picker element.\n",
+              " * @param {string} outputId Element ID of the output display.\n",
+              " * @return {!Iterable<!Object>} Iterable of next steps.\n",
+              " */\n",
+              "function* uploadFilesStep(inputId, outputId) {\n",
+              "  const inputElement = document.getElementById(inputId);\n",
+              "  inputElement.disabled = false;\n",
+              "\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  outputElement.innerHTML = '';\n",
+              "\n",
+              "  const pickedPromise = new Promise((resolve) => {\n",
+              "    inputElement.addEventListener('change', (e) => {\n",
+              "      resolve(e.target.files);\n",
+              "    });\n",
+              "  });\n",
+              "\n",
+              "  const cancel = document.createElement('button');\n",
+              "  inputElement.parentElement.appendChild(cancel);\n",
+              "  cancel.textContent = 'Cancel upload';\n",
+              "  const cancelPromise = new Promise((resolve) => {\n",
+              "    cancel.onclick = () => {\n",
+              "      resolve(null);\n",
+              "    };\n",
+              "  });\n",
+              "\n",
+              "  // Wait for the user to pick the files.\n",
+              "  const files = yield {\n",
+              "    promise: Promise.race([pickedPromise, cancelPromise]),\n",
+              "    response: {\n",
+              "      action: 'starting',\n",
+              "    }\n",
+              "  };\n",
+              "\n",
+              "  cancel.remove();\n",
+              "\n",
+              "  // Disable the input element since further picks are not allowed.\n",
+              "  inputElement.disabled = true;\n",
+              "\n",
+              "  if (!files) {\n",
+              "    return {\n",
+              "      response: {\n",
+              "        action: 'complete',\n",
+              "      }\n",
+              "    };\n",
+              "  }\n",
+              "\n",
+              "  for (const file of files) {\n",
+              "    const li = document.createElement('li');\n",
+              "    li.append(span(file.name, {fontWeight: 'bold'}));\n",
+              "    li.append(span(\n",
+              "        `(${file.type || 'n/a'}) - ${file.size} bytes, ` +\n",
+              "        `last modified: ${\n",
+              "            file.lastModifiedDate ? file.lastModifiedDate.toLocaleDateString() :\n",
+              "                                    'n/a'} - `));\n",
+              "    const percent = span('0% done');\n",
+              "    li.appendChild(percent);\n",
+              "\n",
+              "    outputElement.appendChild(li);\n",
+              "\n",
+              "    const fileDataPromise = new Promise((resolve) => {\n",
+              "      const reader = new FileReader();\n",
+              "      reader.onload = (e) => {\n",
+              "        resolve(e.target.result);\n",
+              "      };\n",
+              "      reader.readAsArrayBuffer(file);\n",
+              "    });\n",
+              "    // Wait for the data to be ready.\n",
+              "    let fileData = yield {\n",
+              "      promise: fileDataPromise,\n",
+              "      response: {\n",
+              "        action: 'continue',\n",
+              "      }\n",
+              "    };\n",
+              "\n",
+              "    // Use a chunked sending to avoid message size limits. See b/62115660.\n",
+              "    let position = 0;\n",
+              "    do {\n",
+              "      const length = Math.min(fileData.byteLength - position, MAX_PAYLOAD_SIZE);\n",
+              "      const chunk = new Uint8Array(fileData, position, length);\n",
+              "      position += length;\n",
+              "\n",
+              "      const base64 = btoa(String.fromCharCode.apply(null, chunk));\n",
+              "      yield {\n",
+              "        response: {\n",
+              "          action: 'append',\n",
+              "          file: file.name,\n",
+              "          data: base64,\n",
+              "        },\n",
+              "      };\n",
+              "\n",
+              "      let percentDone = fileData.byteLength === 0 ?\n",
+              "          100 :\n",
+              "          Math.round((position / fileData.byteLength) * 100);\n",
+              "      percent.textContent = `${percentDone}% done`;\n",
+              "\n",
+              "    } while (position < fileData.byteLength);\n",
+              "  }\n",
+              "\n",
+              "  // All done.\n",
+              "  yield {\n",
+              "    response: {\n",
+              "      action: 'complete',\n",
+              "    }\n",
+              "  };\n",
+              "}\n",
+              "\n",
+              "scope.google = scope.google || {};\n",
+              "scope.google.colab = scope.google.colab || {};\n",
+              "scope.google.colab._files = {\n",
+              "  _uploadFiles,\n",
+              "  _uploadFilesContinue,\n",
+              "};\n",
+              "})(self);\n",
+              "</script> "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "error",
+          "ename": "KeyboardInterrupt",
+          "evalue": "",
+          "traceback": [
+            "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+            "\u001b[0;31mKeyboardInterrupt\u001b[0m                         Traceback (most recent call last)",
+            "\u001b[0;32m<ipython-input-50-49432676dcaa>\u001b[0m in \u001b[0;36m<cell line: 2>\u001b[0;34m()\u001b[0m\n\u001b[1;32m      1\u001b[0m \u001b[0;32mfrom\u001b[0m \u001b[0mgoogle\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mcolab\u001b[0m \u001b[0;32mimport\u001b[0m \u001b[0mfiles\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m----> 2\u001b[0;31m \u001b[0muploaded\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mfiles\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mupload\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/google/colab/files.py\u001b[0m in \u001b[0;36mupload\u001b[0;34m(target_dir)\u001b[0m\n\u001b[1;32m     70\u001b[0m   \"\"\"\n\u001b[1;32m     71\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 72\u001b[0;31m   \u001b[0muploaded_files\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0m_upload_files\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mmultiple\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mTrue\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     73\u001b[0m   \u001b[0;31m# Mapping from original filename to filename as saved locally.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     74\u001b[0m   \u001b[0mlocal_filenames\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mdict\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/google/colab/files.py\u001b[0m in \u001b[0;36m_upload_files\u001b[0;34m(multiple)\u001b[0m\n\u001b[1;32m    162\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    163\u001b[0m   \u001b[0;31m# First result is always an indication that the file picker has completed.\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 164\u001b[0;31m   result = _output.eval_js(\n\u001b[0m\u001b[1;32m    165\u001b[0m       'google.colab._files._uploadFiles(\"{input_id}\", \"{output_id}\")'.format(\n\u001b[1;32m    166\u001b[0m           \u001b[0minput_id\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0minput_id\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0moutput_id\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0moutput_id\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/google/colab/output/_js.py\u001b[0m in \u001b[0;36meval_js\u001b[0;34m(script, ignore_result, timeout_sec)\u001b[0m\n\u001b[1;32m     38\u001b[0m   \u001b[0;32mif\u001b[0m \u001b[0mignore_result\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     39\u001b[0m     \u001b[0;32mreturn\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 40\u001b[0;31m   \u001b[0;32mreturn\u001b[0m \u001b[0m_message\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mread_reply_from_input\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mrequest_id\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mtimeout_sec\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     41\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     42\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n",
+            "\u001b[0;32m/usr/local/lib/python3.10/dist-packages/google/colab/_message.py\u001b[0m in \u001b[0;36mread_reply_from_input\u001b[0;34m(message_id, timeout_sec)\u001b[0m\n\u001b[1;32m     94\u001b[0m     \u001b[0mreply\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0m_read_next_input_message\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     95\u001b[0m     \u001b[0;32mif\u001b[0m \u001b[0mreply\u001b[0m \u001b[0;34m==\u001b[0m \u001b[0m_NOT_READY\u001b[0m \u001b[0;32mor\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0misinstance\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mreply\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mdict\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 96\u001b[0;31m       \u001b[0mtime\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0msleep\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;36m0.025\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     97\u001b[0m       \u001b[0;32mcontinue\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     98\u001b[0m     if (\n",
+            "\u001b[0;31mKeyboardInterrupt\u001b[0m: "
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import files\n",
+        "uploaded=files.upload()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 74
+        },
+        "id": "nXLcQsDhb8R8",
+        "outputId": "2280eb5d-e1f1-4565-97a5-235a21de156c"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "\n",
+              "     <input type=\"file\" id=\"files-cdd20491-4bb6-4f2e-afa2-e5b7579a0730\" name=\"files[]\" multiple disabled\n",
+              "        style=\"border:none\" />\n",
+              "     <output id=\"result-cdd20491-4bb6-4f2e-afa2-e5b7579a0730\">\n",
+              "      Upload widget is only available when the cell has been executed in the\n",
+              "      current browser session. Please rerun this cell to enable.\n",
+              "      </output>\n",
+              "      <script>// Copyright 2017 Google LLC\n",
+              "//\n",
+              "// Licensed under the Apache License, Version 2.0 (the \"License\");\n",
+              "// you may not use this file except in compliance with the License.\n",
+              "// You may obtain a copy of the License at\n",
+              "//\n",
+              "//      http://www.apache.org/licenses/LICENSE-2.0\n",
+              "//\n",
+              "// Unless required by applicable law or agreed to in writing, software\n",
+              "// distributed under the License is distributed on an \"AS IS\" BASIS,\n",
+              "// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n",
+              "// See the License for the specific language governing permissions and\n",
+              "// limitations under the License.\n",
+              "\n",
+              "/**\n",
+              " * @fileoverview Helpers for google.colab Python module.\n",
+              " */\n",
+              "(function(scope) {\n",
+              "function span(text, styleAttributes = {}) {\n",
+              "  const element = document.createElement('span');\n",
+              "  element.textContent = text;\n",
+              "  for (const key of Object.keys(styleAttributes)) {\n",
+              "    element.style[key] = styleAttributes[key];\n",
+              "  }\n",
+              "  return element;\n",
+              "}\n",
+              "\n",
+              "// Max number of bytes which will be uploaded at a time.\n",
+              "const MAX_PAYLOAD_SIZE = 100 * 1024;\n",
+              "\n",
+              "function _uploadFiles(inputId, outputId) {\n",
+              "  const steps = uploadFilesStep(inputId, outputId);\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  // Cache steps on the outputElement to make it available for the next call\n",
+              "  // to uploadFilesContinue from Python.\n",
+              "  outputElement.steps = steps;\n",
+              "\n",
+              "  return _uploadFilesContinue(outputId);\n",
+              "}\n",
+              "\n",
+              "// This is roughly an async generator (not supported in the browser yet),\n",
+              "// where there are multiple asynchronous steps and the Python side is going\n",
+              "// to poll for completion of each step.\n",
+              "// This uses a Promise to block the python side on completion of each step,\n",
+              "// then passes the result of the previous step as the input to the next step.\n",
+              "function _uploadFilesContinue(outputId) {\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  const steps = outputElement.steps;\n",
+              "\n",
+              "  const next = steps.next(outputElement.lastPromiseValue);\n",
+              "  return Promise.resolve(next.value.promise).then((value) => {\n",
+              "    // Cache the last promise value to make it available to the next\n",
+              "    // step of the generator.\n",
+              "    outputElement.lastPromiseValue = value;\n",
+              "    return next.value.response;\n",
+              "  });\n",
+              "}\n",
+              "\n",
+              "/**\n",
+              " * Generator function which is called between each async step of the upload\n",
+              " * process.\n",
+              " * @param {string} inputId Element ID of the input file picker element.\n",
+              " * @param {string} outputId Element ID of the output display.\n",
+              " * @return {!Iterable<!Object>} Iterable of next steps.\n",
+              " */\n",
+              "function* uploadFilesStep(inputId, outputId) {\n",
+              "  const inputElement = document.getElementById(inputId);\n",
+              "  inputElement.disabled = false;\n",
+              "\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  outputElement.innerHTML = '';\n",
+              "\n",
+              "  const pickedPromise = new Promise((resolve) => {\n",
+              "    inputElement.addEventListener('change', (e) => {\n",
+              "      resolve(e.target.files);\n",
+              "    });\n",
+              "  });\n",
+              "\n",
+              "  const cancel = document.createElement('button');\n",
+              "  inputElement.parentElement.appendChild(cancel);\n",
+              "  cancel.textContent = 'Cancel upload';\n",
+              "  const cancelPromise = new Promise((resolve) => {\n",
+              "    cancel.onclick = () => {\n",
+              "      resolve(null);\n",
+              "    };\n",
+              "  });\n",
+              "\n",
+              "  // Wait for the user to pick the files.\n",
+              "  const files = yield {\n",
+              "    promise: Promise.race([pickedPromise, cancelPromise]),\n",
+              "    response: {\n",
+              "      action: 'starting',\n",
+              "    }\n",
+              "  };\n",
+              "\n",
+              "  cancel.remove();\n",
+              "\n",
+              "  // Disable the input element since further picks are not allowed.\n",
+              "  inputElement.disabled = true;\n",
+              "\n",
+              "  if (!files) {\n",
+              "    return {\n",
+              "      response: {\n",
+              "        action: 'complete',\n",
+              "      }\n",
+              "    };\n",
+              "  }\n",
+              "\n",
+              "  for (const file of files) {\n",
+              "    const li = document.createElement('li');\n",
+              "    li.append(span(file.name, {fontWeight: 'bold'}));\n",
+              "    li.append(span(\n",
+              "        `(${file.type || 'n/a'}) - ${file.size} bytes, ` +\n",
+              "        `last modified: ${\n",
+              "            file.lastModifiedDate ? file.lastModifiedDate.toLocaleDateString() :\n",
+              "                                    'n/a'} - `));\n",
+              "    const percent = span('0% done');\n",
+              "    li.appendChild(percent);\n",
+              "\n",
+              "    outputElement.appendChild(li);\n",
+              "\n",
+              "    const fileDataPromise = new Promise((resolve) => {\n",
+              "      const reader = new FileReader();\n",
+              "      reader.onload = (e) => {\n",
+              "        resolve(e.target.result);\n",
+              "      };\n",
+              "      reader.readAsArrayBuffer(file);\n",
+              "    });\n",
+              "    // Wait for the data to be ready.\n",
+              "    let fileData = yield {\n",
+              "      promise: fileDataPromise,\n",
+              "      response: {\n",
+              "        action: 'continue',\n",
+              "      }\n",
+              "    };\n",
+              "\n",
+              "    // Use a chunked sending to avoid message size limits. See b/62115660.\n",
+              "    let position = 0;\n",
+              "    do {\n",
+              "      const length = Math.min(fileData.byteLength - position, MAX_PAYLOAD_SIZE);\n",
+              "      const chunk = new Uint8Array(fileData, position, length);\n",
+              "      position += length;\n",
+              "\n",
+              "      const base64 = btoa(String.fromCharCode.apply(null, chunk));\n",
+              "      yield {\n",
+              "        response: {\n",
+              "          action: 'append',\n",
+              "          file: file.name,\n",
+              "          data: base64,\n",
+              "        },\n",
+              "      };\n",
+              "\n",
+              "      let percentDone = fileData.byteLength === 0 ?\n",
+              "          100 :\n",
+              "          Math.round((position / fileData.byteLength) * 100);\n",
+              "      percent.textContent = `${percentDone}% done`;\n",
+              "\n",
+              "    } while (position < fileData.byteLength);\n",
+              "  }\n",
+              "\n",
+              "  // All done.\n",
+              "  yield {\n",
+              "    response: {\n",
+              "      action: 'complete',\n",
+              "    }\n",
+              "  };\n",
+              "}\n",
+              "\n",
+              "scope.google = scope.google || {};\n",
+              "scope.google.colab = scope.google.colab || {};\n",
+              "scope.google.colab._files = {\n",
+              "  _uploadFiles,\n",
+              "  _uploadFilesContinue,\n",
+              "};\n",
+              "})(self);\n",
+              "</script> "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Saving cleaned_data.csv to cleaned_data (1).csv\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import joblib\n",
+        "\n",
+        "# Save the trained model and vectorizer\n",
+        "joblib.dump(model, 'cyberbully_classifier.pkl')\n",
+        "joblib.dump(vectorizer, 'tfidf_vectorizer.pkl')"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ixN6I5FteCxn",
+        "outputId": "27d0b1c3-6fb9-4530-91be-2002dc3067cd"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "['tfidf_vectorizer.pkl']"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 52
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Load the model and vectorizer\n",
+        "model = joblib.load('cyberbully_classifier.pkl')\n",
+        "vectorizer = joblib.load('tfidf_vectorizer.pkl')\n",
+        "\n",
+        "# Example: Predict on a new tweet\n",
+        "new_tweet = \"You are worthless, nobody likes you!\"\n",
+        "processed_tweet = preprocess_text(new_tweet)\n",
+        "vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "prediction = model.predict(vectorized_tweet)\n",
+        "print(\"Prediction:\", prediction[0])  # Output: 'cyberbullying' or 'non-cyberbullying'"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "HWZ9bTKEeOp_",
+        "outputId": "74127378-2d8b-42a5-d11c-f6332c82dcbe"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prediction: cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import files\n",
+        "uploaded=files.upload()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 74
+        },
+        "id": "Pj7afXRDeYvA",
+        "outputId": "d30cae06-4361-4a1b-a7ec-fd7ee98cf72f"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "\n",
+              "     <input type=\"file\" id=\"files-7c8838ff-5cdc-4ada-b003-eaa807bb5525\" name=\"files[]\" multiple disabled\n",
+              "        style=\"border:none\" />\n",
+              "     <output id=\"result-7c8838ff-5cdc-4ada-b003-eaa807bb5525\">\n",
+              "      Upload widget is only available when the cell has been executed in the\n",
+              "      current browser session. Please rerun this cell to enable.\n",
+              "      </output>\n",
+              "      <script>// Copyright 2017 Google LLC\n",
+              "//\n",
+              "// Licensed under the Apache License, Version 2.0 (the \"License\");\n",
+              "// you may not use this file except in compliance with the License.\n",
+              "// You may obtain a copy of the License at\n",
+              "//\n",
+              "//      http://www.apache.org/licenses/LICENSE-2.0\n",
+              "//\n",
+              "// Unless required by applicable law or agreed to in writing, software\n",
+              "// distributed under the License is distributed on an \"AS IS\" BASIS,\n",
+              "// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n",
+              "// See the License for the specific language governing permissions and\n",
+              "// limitations under the License.\n",
+              "\n",
+              "/**\n",
+              " * @fileoverview Helpers for google.colab Python module.\n",
+              " */\n",
+              "(function(scope) {\n",
+              "function span(text, styleAttributes = {}) {\n",
+              "  const element = document.createElement('span');\n",
+              "  element.textContent = text;\n",
+              "  for (const key of Object.keys(styleAttributes)) {\n",
+              "    element.style[key] = styleAttributes[key];\n",
+              "  }\n",
+              "  return element;\n",
+              "}\n",
+              "\n",
+              "// Max number of bytes which will be uploaded at a time.\n",
+              "const MAX_PAYLOAD_SIZE = 100 * 1024;\n",
+              "\n",
+              "function _uploadFiles(inputId, outputId) {\n",
+              "  const steps = uploadFilesStep(inputId, outputId);\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  // Cache steps on the outputElement to make it available for the next call\n",
+              "  // to uploadFilesContinue from Python.\n",
+              "  outputElement.steps = steps;\n",
+              "\n",
+              "  return _uploadFilesContinue(outputId);\n",
+              "}\n",
+              "\n",
+              "// This is roughly an async generator (not supported in the browser yet),\n",
+              "// where there are multiple asynchronous steps and the Python side is going\n",
+              "// to poll for completion of each step.\n",
+              "// This uses a Promise to block the python side on completion of each step,\n",
+              "// then passes the result of the previous step as the input to the next step.\n",
+              "function _uploadFilesContinue(outputId) {\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  const steps = outputElement.steps;\n",
+              "\n",
+              "  const next = steps.next(outputElement.lastPromiseValue);\n",
+              "  return Promise.resolve(next.value.promise).then((value) => {\n",
+              "    // Cache the last promise value to make it available to the next\n",
+              "    // step of the generator.\n",
+              "    outputElement.lastPromiseValue = value;\n",
+              "    return next.value.response;\n",
+              "  });\n",
+              "}\n",
+              "\n",
+              "/**\n",
+              " * Generator function which is called between each async step of the upload\n",
+              " * process.\n",
+              " * @param {string} inputId Element ID of the input file picker element.\n",
+              " * @param {string} outputId Element ID of the output display.\n",
+              " * @return {!Iterable<!Object>} Iterable of next steps.\n",
+              " */\n",
+              "function* uploadFilesStep(inputId, outputId) {\n",
+              "  const inputElement = document.getElementById(inputId);\n",
+              "  inputElement.disabled = false;\n",
+              "\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  outputElement.innerHTML = '';\n",
+              "\n",
+              "  const pickedPromise = new Promise((resolve) => {\n",
+              "    inputElement.addEventListener('change', (e) => {\n",
+              "      resolve(e.target.files);\n",
+              "    });\n",
+              "  });\n",
+              "\n",
+              "  const cancel = document.createElement('button');\n",
+              "  inputElement.parentElement.appendChild(cancel);\n",
+              "  cancel.textContent = 'Cancel upload';\n",
+              "  const cancelPromise = new Promise((resolve) => {\n",
+              "    cancel.onclick = () => {\n",
+              "      resolve(null);\n",
+              "    };\n",
+              "  });\n",
+              "\n",
+              "  // Wait for the user to pick the files.\n",
+              "  const files = yield {\n",
+              "    promise: Promise.race([pickedPromise, cancelPromise]),\n",
+              "    response: {\n",
+              "      action: 'starting',\n",
+              "    }\n",
+              "  };\n",
+              "\n",
+              "  cancel.remove();\n",
+              "\n",
+              "  // Disable the input element since further picks are not allowed.\n",
+              "  inputElement.disabled = true;\n",
+              "\n",
+              "  if (!files) {\n",
+              "    return {\n",
+              "      response: {\n",
+              "        action: 'complete',\n",
+              "      }\n",
+              "    };\n",
+              "  }\n",
+              "\n",
+              "  for (const file of files) {\n",
+              "    const li = document.createElement('li');\n",
+              "    li.append(span(file.name, {fontWeight: 'bold'}));\n",
+              "    li.append(span(\n",
+              "        `(${file.type || 'n/a'}) - ${file.size} bytes, ` +\n",
+              "        `last modified: ${\n",
+              "            file.lastModifiedDate ? file.lastModifiedDate.toLocaleDateString() :\n",
+              "                                    'n/a'} - `));\n",
+              "    const percent = span('0% done');\n",
+              "    li.appendChild(percent);\n",
+              "\n",
+              "    outputElement.appendChild(li);\n",
+              "\n",
+              "    const fileDataPromise = new Promise((resolve) => {\n",
+              "      const reader = new FileReader();\n",
+              "      reader.onload = (e) => {\n",
+              "        resolve(e.target.result);\n",
+              "      };\n",
+              "      reader.readAsArrayBuffer(file);\n",
+              "    });\n",
+              "    // Wait for the data to be ready.\n",
+              "    let fileData = yield {\n",
+              "      promise: fileDataPromise,\n",
+              "      response: {\n",
+              "        action: 'continue',\n",
+              "      }\n",
+              "    };\n",
+              "\n",
+              "    // Use a chunked sending to avoid message size limits. See b/62115660.\n",
+              "    let position = 0;\n",
+              "    do {\n",
+              "      const length = Math.min(fileData.byteLength - position, MAX_PAYLOAD_SIZE);\n",
+              "      const chunk = new Uint8Array(fileData, position, length);\n",
+              "      position += length;\n",
+              "\n",
+              "      const base64 = btoa(String.fromCharCode.apply(null, chunk));\n",
+              "      yield {\n",
+              "        response: {\n",
+              "          action: 'append',\n",
+              "          file: file.name,\n",
+              "          data: base64,\n",
+              "        },\n",
+              "      };\n",
+              "\n",
+              "      let percentDone = fileData.byteLength === 0 ?\n",
+              "          100 :\n",
+              "          Math.round((position / fileData.byteLength) * 100);\n",
+              "      percent.textContent = `${percentDone}% done`;\n",
+              "\n",
+              "    } while (position < fileData.byteLength);\n",
+              "  }\n",
+              "\n",
+              "  // All done.\n",
+              "  yield {\n",
+              "    response: {\n",
+              "      action: 'complete',\n",
+              "    }\n",
+              "  };\n",
+              "}\n",
+              "\n",
+              "scope.google = scope.google || {};\n",
+              "scope.google.colab = scope.google.colab || {};\n",
+              "scope.google.colab._files = {\n",
+              "  _uploadFiles,\n",
+              "  _uploadFilesContinue,\n",
+              "};\n",
+              "})(self);\n",
+              "</script> "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Saving cyberbully_classifier.pkl to cyberbully_classifier (1).pkl\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import files\n",
+        "uploaded=files.upload()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 74
+        },
+        "id": "8y1Nw_chfTom",
+        "outputId": "5ea1d1ed-9c6e-4b91-ec65-72fe30914a50"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "\n",
+              "     <input type=\"file\" id=\"files-46fc3fed-6bd5-4fc5-8a77-9ae9f2058be7\" name=\"files[]\" multiple disabled\n",
+              "        style=\"border:none\" />\n",
+              "     <output id=\"result-46fc3fed-6bd5-4fc5-8a77-9ae9f2058be7\">\n",
+              "      Upload widget is only available when the cell has been executed in the\n",
+              "      current browser session. Please rerun this cell to enable.\n",
+              "      </output>\n",
+              "      <script>// Copyright 2017 Google LLC\n",
+              "//\n",
+              "// Licensed under the Apache License, Version 2.0 (the \"License\");\n",
+              "// you may not use this file except in compliance with the License.\n",
+              "// You may obtain a copy of the License at\n",
+              "//\n",
+              "//      http://www.apache.org/licenses/LICENSE-2.0\n",
+              "//\n",
+              "// Unless required by applicable law or agreed to in writing, software\n",
+              "// distributed under the License is distributed on an \"AS IS\" BASIS,\n",
+              "// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n",
+              "// See the License for the specific language governing permissions and\n",
+              "// limitations under the License.\n",
+              "\n",
+              "/**\n",
+              " * @fileoverview Helpers for google.colab Python module.\n",
+              " */\n",
+              "(function(scope) {\n",
+              "function span(text, styleAttributes = {}) {\n",
+              "  const element = document.createElement('span');\n",
+              "  element.textContent = text;\n",
+              "  for (const key of Object.keys(styleAttributes)) {\n",
+              "    element.style[key] = styleAttributes[key];\n",
+              "  }\n",
+              "  return element;\n",
+              "}\n",
+              "\n",
+              "// Max number of bytes which will be uploaded at a time.\n",
+              "const MAX_PAYLOAD_SIZE = 100 * 1024;\n",
+              "\n",
+              "function _uploadFiles(inputId, outputId) {\n",
+              "  const steps = uploadFilesStep(inputId, outputId);\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  // Cache steps on the outputElement to make it available for the next call\n",
+              "  // to uploadFilesContinue from Python.\n",
+              "  outputElement.steps = steps;\n",
+              "\n",
+              "  return _uploadFilesContinue(outputId);\n",
+              "}\n",
+              "\n",
+              "// This is roughly an async generator (not supported in the browser yet),\n",
+              "// where there are multiple asynchronous steps and the Python side is going\n",
+              "// to poll for completion of each step.\n",
+              "// This uses a Promise to block the python side on completion of each step,\n",
+              "// then passes the result of the previous step as the input to the next step.\n",
+              "function _uploadFilesContinue(outputId) {\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  const steps = outputElement.steps;\n",
+              "\n",
+              "  const next = steps.next(outputElement.lastPromiseValue);\n",
+              "  return Promise.resolve(next.value.promise).then((value) => {\n",
+              "    // Cache the last promise value to make it available to the next\n",
+              "    // step of the generator.\n",
+              "    outputElement.lastPromiseValue = value;\n",
+              "    return next.value.response;\n",
+              "  });\n",
+              "}\n",
+              "\n",
+              "/**\n",
+              " * Generator function which is called between each async step of the upload\n",
+              " * process.\n",
+              " * @param {string} inputId Element ID of the input file picker element.\n",
+              " * @param {string} outputId Element ID of the output display.\n",
+              " * @return {!Iterable<!Object>} Iterable of next steps.\n",
+              " */\n",
+              "function* uploadFilesStep(inputId, outputId) {\n",
+              "  const inputElement = document.getElementById(inputId);\n",
+              "  inputElement.disabled = false;\n",
+              "\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  outputElement.innerHTML = '';\n",
+              "\n",
+              "  const pickedPromise = new Promise((resolve) => {\n",
+              "    inputElement.addEventListener('change', (e) => {\n",
+              "      resolve(e.target.files);\n",
+              "    });\n",
+              "  });\n",
+              "\n",
+              "  const cancel = document.createElement('button');\n",
+              "  inputElement.parentElement.appendChild(cancel);\n",
+              "  cancel.textContent = 'Cancel upload';\n",
+              "  const cancelPromise = new Promise((resolve) => {\n",
+              "    cancel.onclick = () => {\n",
+              "      resolve(null);\n",
+              "    };\n",
+              "  });\n",
+              "\n",
+              "  // Wait for the user to pick the files.\n",
+              "  const files = yield {\n",
+              "    promise: Promise.race([pickedPromise, cancelPromise]),\n",
+              "    response: {\n",
+              "      action: 'starting',\n",
+              "    }\n",
+              "  };\n",
+              "\n",
+              "  cancel.remove();\n",
+              "\n",
+              "  // Disable the input element since further picks are not allowed.\n",
+              "  inputElement.disabled = true;\n",
+              "\n",
+              "  if (!files) {\n",
+              "    return {\n",
+              "      response: {\n",
+              "        action: 'complete',\n",
+              "      }\n",
+              "    };\n",
+              "  }\n",
+              "\n",
+              "  for (const file of files) {\n",
+              "    const li = document.createElement('li');\n",
+              "    li.append(span(file.name, {fontWeight: 'bold'}));\n",
+              "    li.append(span(\n",
+              "        `(${file.type || 'n/a'}) - ${file.size} bytes, ` +\n",
+              "        `last modified: ${\n",
+              "            file.lastModifiedDate ? file.lastModifiedDate.toLocaleDateString() :\n",
+              "                                    'n/a'} - `));\n",
+              "    const percent = span('0% done');\n",
+              "    li.appendChild(percent);\n",
+              "\n",
+              "    outputElement.appendChild(li);\n",
+              "\n",
+              "    const fileDataPromise = new Promise((resolve) => {\n",
+              "      const reader = new FileReader();\n",
+              "      reader.onload = (e) => {\n",
+              "        resolve(e.target.result);\n",
+              "      };\n",
+              "      reader.readAsArrayBuffer(file);\n",
+              "    });\n",
+              "    // Wait for the data to be ready.\n",
+              "    let fileData = yield {\n",
+              "      promise: fileDataPromise,\n",
+              "      response: {\n",
+              "        action: 'continue',\n",
+              "      }\n",
+              "    };\n",
+              "\n",
+              "    // Use a chunked sending to avoid message size limits. See b/62115660.\n",
+              "    let position = 0;\n",
+              "    do {\n",
+              "      const length = Math.min(fileData.byteLength - position, MAX_PAYLOAD_SIZE);\n",
+              "      const chunk = new Uint8Array(fileData, position, length);\n",
+              "      position += length;\n",
+              "\n",
+              "      const base64 = btoa(String.fromCharCode.apply(null, chunk));\n",
+              "      yield {\n",
+              "        response: {\n",
+              "          action: 'append',\n",
+              "          file: file.name,\n",
+              "          data: base64,\n",
+              "        },\n",
+              "      };\n",
+              "\n",
+              "      let percentDone = fileData.byteLength === 0 ?\n",
+              "          100 :\n",
+              "          Math.round((position / fileData.byteLength) * 100);\n",
+              "      percent.textContent = `${percentDone}% done`;\n",
+              "\n",
+              "    } while (position < fileData.byteLength);\n",
+              "  }\n",
+              "\n",
+              "  // All done.\n",
+              "  yield {\n",
+              "    response: {\n",
+              "      action: 'complete',\n",
+              "    }\n",
+              "  };\n",
+              "}\n",
+              "\n",
+              "scope.google = scope.google || {};\n",
+              "scope.google.colab = scope.google.colab || {};\n",
+              "scope.google.colab._files = {\n",
+              "  _uploadFiles,\n",
+              "  _uploadFilesContinue,\n",
+              "};\n",
+              "})(self);\n",
+              "</script> "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Saving tfidf_vectorizer.pkl to tfidf_vectorizer (1).pkl\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import os\n",
+        "os.listdir()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "RVADoi3YfafP",
+        "outputId": "a73eb97f-6178-44be-dda6-dc541f67dee7"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "['.config',\n",
+              " 'cyberbully_classifier.pkl',\n",
+              " 'tfidf_vectorizer (1).pkl',\n",
+              " 'cyberbullying_tweets.csv.zip',\n",
+              " 'cleaned_data (1).csv',\n",
+              " 'tfidf_vectorizer.pkl',\n",
+              " 'cyberbully_classifier (1).pkl',\n",
+              " 'cleaned_data.csv',\n",
+              " 'sample_data']"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 56
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import joblib\n",
+        "\n",
+        "# Load the trained model and vectorizer\n",
+        "model = joblib.load('/content/cyberbully_classifier.pkl')  # Use the correct path to the file\n",
+        "vectorizer = joblib.load('/content/tfidf_vectorizer.pkl')  # Use the correct path to the file"
+      ],
+      "metadata": {
+        "id": "oEaw61UufmEH"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(model)\n",
+        "print(vectorizer)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Vcy22Yhrf662",
+        "outputId": "80e63ce5-2a00-41fc-db5e-09d5b9c2a393"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "LogisticRegression()\n",
+            "TfidfVectorizer(max_features=5000)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Preprocess the text (same function used during training)\n",
+        "def preprocess_text(text):\n",
+        "    text = text.lower()  # Convert text to lowercase\n",
+        "    text = re.sub(r\"http\\S+|www\\S+|https\\S+\", '', text)  # Remove URLs\n",
+        "    text = re.sub(r'@\\w+|#', '', text)  # Remove mentions and hashtags\n",
+        "    text = re.sub(r'[^a-zA-Z\\s]', '', text)  # Remove non-alphabetic characters\n",
+        "    stop_words = set(stopwords.words('english'))  # Get English stopwords\n",
+        "    text = \" \".join(word for word in text.split() if word not in stop_words)  # Remove stopwords\n",
+        "    return text\n",
+        "\n",
+        "# Example of using the model to predict a new tweet\n",
+        "tweet = \"You're such a loser!\"\n",
+        "processed_tweet = preprocess_text(tweet)\n",
+        "vectorized_tweet = vectorizer.transform([processed_tweet])\n",
+        "\n",
+        "prediction = model.predict(vectorized_tweet)\n",
+        "print(\"Prediction:\", prediction[0])"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "eI2-h3MugHJW",
+        "outputId": "5294348e-32b8-40c1-f08f-6975201c8eae"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Prediction: cyberbullying\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Cyberbullying Classification Model\n",
+        "\n",
+        "This project aims to classify tweets as either *cyberbullying* or *non-cyberbullying* using a *Logistic Regression* model.\n",
+        "\n",
+        "## Steps:\n",
+        "1. Data Preprocessing: Removing noise from text (URLs, stopwords).\n",
+        "2. Feature Extraction: TF-IDF vectorization of text.\n",
+        "3. Model Training: Logistic Regression classifier.\n",
+        "4. Evaluation: Evaluated using accuracy and classification reports."
+      ],
+      "metadata": {
+        "id": "2ksuJr7OhQ_C"
+      }
+    }
+  ]
+}
